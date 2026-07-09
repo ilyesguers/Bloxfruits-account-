@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔥 BFF Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 15px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(90deg, #ff5000, #ff8800);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(255, 80, 0, 0.4);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: #1e1e3f;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #333;
+        }
+        
+        .stat-box .num {
+            font-size: 28px;
+            font-weight: bold;
+            color: #ff8800;
+        }
+        
+        .stat-box .label {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        
+        .accounts-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+        
+        @media (min-width: 768px) {
+            .accounts-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .account-card {
+            background: linear-gradient(135deg, #1e1e3f 0%, #2a2a5f 100%);
+            border-radius: 15px;
+            padding: 20px;
+            border: 2px solid #333;
+            transition: all 0.3s;
+        }
+        
+        .account-card.online {
+            border-color: #00ff88;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+        }
+        
+        .account-card.offline {
+            border-color: #ff3355;
+            opacity: 0.6;
+        }
+        
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #444;
+        }
+        
+        .account-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff8800;
+        }
+        
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-online {
+            background: #00ff88;
+            color: #000;
+        }
+        
+        .status-offline {
+            background: #ff3355;
+            color: #fff;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            color: #aaa;
+            font-size: 13px;
+        }
+        
+        .info-value {
+            color: #fff;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        .no-accounts {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .refresh-info {
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+            margin-top: 20px;
+        }
+        
+        .fruit-tag {
+            display: inline-block;
+            background: #ff5500;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔥 BLOX FRUIT FURY</h1>
+        <div style="font-size:13px; opacity:0.9;">لوحة تحكم الحسابات</div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat-box">
+            <div class="num" id="totalAccounts">0</div>
+            <div class="label">إجمالي الحسابات</div>
+        </div>
+        <div class="stat-box">
+            <div class="num" id="onlineAccounts" style="color:#00ff88;">0</div>
+            <div class="label">أونلاين 🟢</div>
+        </div>
+        <div class="stat-box">
+            <div class="num" id="offlineAccounts" style="color:#ff3355;">0</div>
+            <div class="label">أوفلاين 🔴</div>
+        </div>
+    </div>
+    
+    <div class="accounts-grid" id="accountsGrid">
+        <div class="no-accounts">لا توجد حسابات متصلة بعد...<br>شغّل السكربت في اللعبة أولاً!</div>
+    </div>
+    
+    <div class="refresh-info">
+        🔄 التحديث التلقائي كل 5 ثواني
+    </div>
+
+    <script>
+        async function fetchAccounts() {
+            try {
+                const res = await fetch('/api/accounts');
+                const data = await res.json();
+                renderAccounts(data);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        
+        function renderAccounts(accounts) {
+            const grid = document.getElementById('accountsGrid');
+            const keys = Object.keys(accounts);
+            
+            document.getElementById('totalAccounts').textContent = keys.length;
+            
+            let online = 0, offline = 0;
+            keys.forEach(k => accounts[k].online ? online++ : offline++);
+            
+            document.getElementById('onlineAccounts').textContent = online;
+            document.getElementById('offlineAccounts').textContent = offline;
+            
+            if (keys.length === 0) {
+                grid.innerHTML = '<div class="no-accounts">لا توجد حسابات متصلة بعد...<br>شغّل السكربت في اللعبة أولاً!</div>';
+                return;
+            }
+            
+            grid.innerHTML = keys.map(username => {
+                const acc = accounts[username];
+                const status = acc.online ? 'online' : 'offline';
+                const statusText = acc.online ? '🟢 أونلاين' : `🔴 آخر ظهور: ${acc.offlineSeconds}ث`;
+                
+                let fruits = 'لا يوجد';
+                if (acc.fruits && acc.fruits.length > 0) {
+                    fruits = acc.fruits.map(f => `<span class="fruit-tag">${f}</span>`).join('');
+                }
+                
+                return `
+                    <div class="account-card ${status}">
+                        <div class="account-header">
+                            <div class="account-name">👤 ${username}</div>
+                            <div class="status-badge status-${status}">${statusText}</div>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">⭐ الليفل</span>
+                            <span class="info-value">${acc.level || '?'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">💰 المال (Beli)</span>
+                            <span class="info-value">${formatNum(acc.beli)}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">💎 الفراقمنت</span>
+                            <span class="info-value">${formatNum(acc.fragments)}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">🌊 العالم</span>
+                            <span class="info-value">${acc.sea || '?'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">📜 التسك</span>
+                            <span class="info-value">${acc.task || 'لا يوجد'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">🍎 الفواكه</span>
+                            <span class="info-value">${fruits}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function formatNum(n) {
+            if (!n || n === '?') return '?';
+            n = Number(n);
+            if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+            if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+            if (n >= 1e3) return (n/1e3).toFixed(2) + 'K';
+            return n;
+        }
+        
+        fetchAccounts();
+        setInterval(fetchAccounts, 5000);
+    </script>
+</body>
+</html>
