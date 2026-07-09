@@ -1,24 +1,46 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF FARM SYSTEM v1.0 🔥
-    نظام الفرم الأسطوري الذكي
+    🔥 BFF FARM PRO v2.0 - النسخة الأسطورية 🔥
+    ══════════════════════════════════════════════
+    - Auto Teleport للجزر
+    - Anti-Damage (يبقى فوق العدو)
+    - Attack Loop سريع جداً
+    - Enemy Spawn Trigger
     ══════════════════════════════════════════════
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
 local VIM = game:GetService("VirtualInputManager")
+local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
 -- ═══════════════════════════════════════
--- قاعدة بيانات الأعداء حسب الليفل
+-- إحداثيات الجزر (Sea 1)
+-- ═══════════════════════════════════════
+local ISLANDS = {
+    ["Starter Island"]    = CFrame.new(1071, 16, 1426),
+    ["Jungle"]            = CFrame.new(-1601, 36, 153),
+    ["Pirate Village"]    = CFrame.new(-1181, 4, 3803),
+    ["Desert"]            = CFrame.new(1094, 6, 4287),
+    ["Frozen Village"]    = CFrame.new(1213, 126, -1183),
+    ["Marine Fortress"]   = CFrame.new(-4842, 20, 4324),
+    ["Sky Island"]        = CFrame.new(-4970, 719, -2622),
+    ["Prison"]            = CFrame.new(4875, 5, 734),
+    ["Colosseum"]         = CFrame.new(-1428, 7, -3014),
+    ["Magma"]             = CFrame.new(-5316, 12, 8517),
+    ["Underwater"]        = CFrame.new(61163, 11, 1819),
+    ["Upper Sky"]         = CFrame.new(-7862, 5545, -380),
+    ["Fountain City"]     = CFrame.new(5127, 4, 4105),
+}
+
+-- ═══════════════════════════════════════
+-- قاعدة بيانات الأعداء
 -- ═══════════════════════════════════════
 local ENEMIES_BY_LEVEL = {
-    -- Sea 1
     {min = 1,    max = 9,    name = "Bandit",              island = "Starter Island"},
     {min = 10,   max = 14,   name = "Monkey",              island = "Jungle"},
     {min = 15,   max = 29,   name = "Gorilla",             island = "Jungle"},
@@ -50,18 +72,20 @@ local ENEMIES_BY_LEVEL = {
 -- إشعار البداية
 -- ═══════════════════════════════════════
 StarterGui:SetCore("SendNotification", {
-    Title = "🔥 BFF Farm";
-    Text = "نظام الفرم بدأ!";
+    Title = "🔥 BFF Farm PRO";
+    Text = "بدء الفرم الأسطوري...";
     Duration = 3;
 })
 
-print("🔥 [BFF FARM] بدأ نظام الفرم الأسطوري")
+print("╔═══════════════════════════════════╗")
+print("║  🔥 BFF FARM PRO v2.0 STARTED    ║")
+print("╚═══════════════════════════════════╝")
 
 -- ═══════════════════════════════════════
--- دوال مساعدة
+-- دوال أساسية
 -- ═══════════════════════════════════════
 local function getChar()
-    return LocalPlayer.Character
+    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 end
 
 local function getHRP()
@@ -82,52 +106,82 @@ local function getLevel()
 end
 
 -- ═══════════════════════════════════════
--- تحديد العدو المطلوب حسب الليفل
+-- تحديد العدو والجزيرة
 -- ═══════════════════════════════════════
-local function getTargetEnemyName()
+local function getTarget()
     local lvl = getLevel()
-    for _, enemy in ipairs(ENEMIES_BY_LEVEL) do
-        if lvl >= enemy.min and lvl <= enemy.max then
-            return enemy.name, enemy.island
+    for _, e in ipairs(ENEMIES_BY_LEVEL) do
+        if lvl >= e.min and lvl <= e.max then
+            return e.name, e.island
         end
     end
-    return "Bandit", "Starter Island" -- افتراضي
+    return "Bandit", "Starter Island"
 end
 
 -- ═══════════════════════════════════════
--- البحث عن أقرب عدو من نوع معين
+-- تجهيز السلاح تلقائياً
 -- ═══════════════════════════════════════
-local function findNearestEnemy(targetName)
+local function equipBestWeapon()
+    local char = getChar()
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if not char or not backpack then return end
+    
+    -- إذا في يده سلاح فعلاً، خلاص
+    for _, item in pairs(char:GetChildren()) do
+        if item:IsA("Tool") then return true end
+    end
+    
+    -- جيب أول سلاح
+    for _, item in pairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+            local hum = getHumanoid()
+            if hum then
+                hum:EquipTool(item)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ═══════════════════════════════════════
+-- Teleport للجزيرة
+-- ═══════════════════════════════════════
+local function teleportToIsland(islandName)
+    local coords = ISLANDS[islandName]
+    if not coords then return false end
+    
+    local hrp = getHRP()
+    if not hrp then return false end
+    
+    hrp.CFrame = coords
+    print("🚢 [BFF] Teleport إلى: " .. islandName)
+    return true
+end
+
+-- ═══════════════════════════════════════
+-- البحث عن أقرب عدو
+-- ═══════════════════════════════════════
+local function findEnemy(targetName)
     local hrp = getHRP()
     if not hrp then return nil end
     
     local nearest = nil
     local nearestDist = math.huge
     
-    -- ابحث في Enemies folder (لو موجود)
-    local enemiesFolder = workspace:FindFirstChild("Enemies")
+    -- ابحث في Enemies folder
+    local enemiesFolder = Workspace:FindFirstChild("Enemies")
     if enemiesFolder then
         for _, enemy in pairs(enemiesFolder:GetChildren()) do
-            if enemy.Name == targetName and enemy:FindFirstChild("Humanoid") 
-               and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-                local dist = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
-                if dist < nearestDist then
-                    nearestDist = dist
-                    nearest = enemy
-                end
-            end
-        end
-    end
-    
-    -- ابحث في Workspace مباشرة كـ backup
-    if not nearest then
-        for _, enemy in pairs(workspace:GetChildren()) do
-            if enemy.Name == targetName and enemy:FindFirstChild("Humanoid") 
-               and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-                local dist = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
-                if dist < nearestDist then
-                    nearestDist = dist
-                    nearest = enemy
+            if enemy.Name == targetName then
+                local hum = enemy:FindFirstChildOfClass("Humanoid")
+                local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+                if hum and hum.Health > 0 and eHRP then
+                    local dist = (hrp.Position - eHRP.Position).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearest = enemy
+                    end
                 end
             end
         end
@@ -137,64 +191,80 @@ local function findNearestEnemy(targetName)
 end
 
 -- ═══════════════════════════════════════
--- الانتقال بـ Tween (سلس، لا يتكشف)
+-- تثبيت اللاعب فوق العدو (Anti-Damage)
 -- ═══════════════════════════════════════
-local function tweenTo(targetCFrame, speed)
-    local hrp = getHRP()
-    if not hrp then return end
-    
-    speed = speed or 400
-    local dist = (hrp.Position - targetCFrame.Position).Magnitude
-    local time = math.max(dist / speed, 0.1)
-    
-    local tween = TweenService:Create(
-        hrp,
-        TweenInfo.new(time, Enum.EasingStyle.Linear),
-        {CFrame = targetCFrame}
-    )
-    
-    tween:Play()
-    return tween
-end
-
--- ═══════════════════════════════════════
--- تجهيز السلاح (السيف أو الفاكهة)
--- ═══════════════════════════════════════
-local function equipWeapon()
-    local char = getChar()
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if not char or not backpack then return end
-    
-    -- إذا في يده سلاح خلاص
-    for _, item in pairs(char:GetChildren()) do
-        if item:IsA("Tool") then return end
+local activeConnection = nil
+local function lockAboveEnemy(enemy)
+    if activeConnection then
+        activeConnection:Disconnect()
+        activeConnection = nil
     end
     
-    -- جيب أول سلاح من backpack
-    for _, item in pairs(backpack:GetChildren()) do
-        if item:IsA("Tool") then
-            local humanoid = getHumanoid()
-            if humanoid then
-                humanoid:EquipTool(item)
-                return
+    local hrp = getHRP()
+    if not hrp or not enemy then return end
+    
+    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+    if not eHRP then return end
+    
+    -- تعطيل الجاذبية
+    activeConnection = RunService.Heartbeat:Connect(function()
+        if enemy and enemy.Parent and eHRP and hrp then
+            local hum = enemy:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                -- ثبت اللاعب فوق العدو بارتفاع 20
+                hrp.CFrame = eHRP.CFrame * CFrame.new(0, 20, 0)
+                hrp.Velocity = Vector3.new(0, 0, 0)
+                hrp.RotVelocity = Vector3.new(0, 0, 0)
+            else
+                if activeConnection then
+                    activeConnection:Disconnect()
+                    activeConnection = nil
+                end
+            end
+        else
+            if activeConnection then
+                activeConnection:Disconnect()
+                activeConnection = nil
             end
         end
-    end
-end
-
--- ═══════════════════════════════════════
--- الهجوم (كليك)
--- ═══════════════════════════════════════
-local function attack()
-    pcall(function()
-        VIM:SendMouseButtonEvent(500, 500, 0, true, game, 1)
-        wait(0.1)
-        VIM:SendMouseButtonEvent(500, 500, 0, false, game, 1)
     end)
 end
 
 -- ═══════════════════════════════════════
--- الحلقة الرئيسية للفرم
+-- الهجوم السريع (Remote-based)
+-- ═══════════════════════════════════════
+local function fastAttack()
+    -- محاولة استخدام Remote مباشرة (أسرع بكثير من الكليك)
+    local success = pcall(function()
+        local args = {"KillLegacy"}
+        local remote = ReplicatedStorage:FindFirstChild("Remotes")
+        if remote then
+            local commE = remote:FindFirstChild("CommE")
+            if commE then
+                commE:FireServer(unpack(args))
+            end
+        end
+    end)
+    
+    -- Fallback: Virtual Click
+    if not success then
+        pcall(function()
+            VIM:SendMouseButtonEvent(500, 500, 0, true, game, 1)
+            VIM:SendMouseButtonEvent(500, 500, 0, false, game, 1)
+        end)
+    end
+end
+
+-- ═══════════════════════════════════════
+-- Anti-Death
+-- ═══════════════════════════════════════
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(3)
+    print("🔄 [BFF] الشخصية عادت، إعادة تشغيل الفرم...")
+end)
+
+-- ═══════════════════════════════════════
+-- الحلقة الرئيسية
 -- ═══════════════════════════════════════
 getgenv().BFF_FARM_ACTIVE = true
 
@@ -202,50 +272,55 @@ spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
         pcall(function()
             local hrp = getHRP()
-            if not hrp then wait(2); return end
+            local hum = getHumanoid()
             
-            equipWeapon()
-            
-            local targetName, targetIsland = getTargetEnemyName()
-            local enemy = findNearestEnemy(targetName)
-            
-            if enemy and enemy:FindFirstChild("HumanoidRootPart") then
-                local enemyHRP = enemy.HumanoidRootPart
-                
-                -- انتقل فوق العدو (لا يقدر يضربك)
-                local targetPos = enemyHRP.CFrame * CFrame.new(0, 15, 0)
-                hrp.CFrame = targetPos
-                
-                -- ثبت اللاعب
-                local humanoid = getHumanoid()
-                if humanoid then
-                    humanoid.WalkSpeed = 0
-                    humanoid.JumpPower = 0
-                end
-                
-                -- هاجم
-                repeat
-                    hrp.CFrame = enemyHRP.CFrame * CFrame.new(0, 15, 0)
-                    attack()
-                    wait(0.3)
-                until not enemy:FindFirstChild("Humanoid") 
-                    or enemy.Humanoid.Health <= 0 
-                    or not getgenv().BFF_FARM_ACTIVE
-                
-                print("✅ [BFF FARM] قتل: " .. targetName)
-            else
-                -- ما فيه عدو قريب، دور بالماب
-                print("🔍 [BFF FARM] يبحث عن: " .. targetName .. " في " .. targetIsland)
+            if not hrp or not hum or hum.Health <= 0 then
                 wait(2)
+                return
+            end
+            
+            -- تجهيز السلاح
+            equipBestWeapon()
+            
+            local targetName, islandName = getTarget()
+            local enemy = findEnemy(targetName)
+            
+            if not enemy then
+                -- ما فيه عدو، روح للجزيرة عشان يترسبنون
+                print("🗺️ [BFF] لا يوجد " .. targetName .. "، الانتقال إلى " .. islandName)
+                teleportToIsland(islandName)
+                wait(3) -- انتظر spawn
+                return
+            end
+            
+            print("⚔️ [BFF] هدف: " .. targetName .. " | Distance: " .. math.floor((hrp.Position - enemy.HumanoidRootPart.Position).Magnitude))
+            
+            -- ثبت فوق العدو
+            lockAboveEnemy(enemy)
+            
+            -- اضرب بسرعة جنونية
+            local enemyHum = enemy:FindFirstChildOfClass("Humanoid")
+            while enemy and enemy.Parent and enemyHum and enemyHum.Health > 0 and getgenv().BFF_FARM_ACTIVE do
+                fastAttack()
+                wait(0.1) -- سرعة عالية جداً
+            end
+            
+            print("💀 [BFF] قتل: " .. targetName)
+            
+            -- فك التثبيت
+            if activeConnection then
+                activeConnection:Disconnect()
+                activeConnection = nil
             end
         end)
-        wait(0.3)
+        wait(0.2)
     end
 end)
 
-print("✅ [BFF FARM] النظام يعمل الآن")
+print("✅ [BFF FARM PRO] النظام يعمل الآن!")
+
 StarterGui:SetCore("SendNotification", {
-    Title = "✅ BFF Farm";
-    Text = "الفرم يعمل! ابحث عن أعداء تلقائياً";
+    Title = "✅ BFF Farm PRO";
+    Text = "الفرم شغال! ينتقل ويقتل تلقائياً";
     Duration = 5;
 })
