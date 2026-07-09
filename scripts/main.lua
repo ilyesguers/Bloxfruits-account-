@@ -1,74 +1,135 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF Startup - اختيار Marines تلقائياً 🔥
+    🔥 BFF MAIN SCRIPT v2.0 - FULL AUTO 🔥
+    ══════════════════════════════════════════════
+    السكربت الرئيسي - يشغل كل شي:
+    
+    ✅ Reporter (بيانات للـ Dashboard)
+    ✅ Marines Selection (اختيار الفريق)
+    ✅ Auto Codes (تفعيل كل الأكواد)
+    ✅ Auto Stats (توزيع النقاط)
+    ✅ Auto Farm (الفرم الأسطوري)
+    ✅ Anti-Kick (إعادة الدخول)
     ══════════════════════════════════════════════
 ]]
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
+
 local LocalPlayer = Players.LocalPlayer
+local RAILWAY_URL = "https://bloxfruits-account-production.up.railway.app"
 
 -- ═══════════════════════════════════════
--- دالة اختيار Marines
+-- إشعار البداية
 -- ═══════════════════════════════════════
-local function ChooseMarines()
-    local success, err = pcall(function()
-        -- الطريقة الرسمية للعبة Blox Fruits
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("SetTeam", "Marine")
-    end)
-    
-    if success then
-        StarterGui:SetCore("SendNotification", {
-            Title = "⚓ Marines";
-            Text = "تم اختيار فريق Marines بنجاح!";
-            Duration = 3;
-        })
-        print("✅ [BFF] Marines Team Selected!")
-        return true
-    else
-        warn("❌ [BFF] فشل اختيار Marines: " .. tostring(err))
-        return false
-    end
-end
+StarterGui:SetCore("SendNotification", {
+    Title = "🔥 BFF MAIN v2.0";
+    Text = "جاري تحميل السكربت الكامل...";
+    Duration = 5;
+})
+
+print("╔═══════════════════════════════════════╗")
+print("║  🔥 BLOX FRUIT FURY - FULL AUTO     ║")
+print("║  Version: 2.0                       ║")
+print("║  Player: " .. LocalPlayer.Name)
+print("╚═══════════════════════════════════════╝")
 
 -- ═══════════════════════════════════════
--- التحقق: هل اللاعب لسا ما اختار فريق؟
+-- 1️⃣ Anti-AFK (منع الطرد)
 -- ═══════════════════════════════════════
-local function NeedsTeamSelection()
-    -- إذا شاشة "Pick a Side" ظاهرة، معناها ما اختار فريق
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
-    if playerGui then
-        local mainGui = playerGui:FindFirstChild("Main")
-        if mainGui then
-            local chooseFrame = mainGui:FindFirstChild("ChooseTeam")
-            if chooseFrame and chooseFrame.Visible then
-                return true
-            end
-        end
-    end
-    return false
-end
-
--- ═══════════════════════════════════════
--- تشغيل الكود
--- ═══════════════════════════════════════
-wait(3) -- انتظر تحميل اللعبة
-
-if NeedsTeamSelection() then
-    print("🎯 [BFF] شاشة اختيار الفريق ظاهرة، جاري اختيار Marines...")
-    wait(1)
-    ChooseMarines()
-else
-    print("✅ [BFF] اللاعب قد اختار فريقه مسبقاً")
-end
-
--- ═══════════════════════════════════════
--- تأكيد الاختيار (محاولة إضافية)
--- ═══════════════════════════════════════
-wait(2)
-pcall(function()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("SetTeam", "Marine")
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+    print("🔄 [BFF] Anti-AFK triggered")
 end)
 
-print("✅ [BFF] Startup complete!")
+-- ═══════════════════════════════════════
+-- 2️⃣ Anti-Kick (إعادة الدخول)
+-- ═══════════════════════════════════════
+local PLACE_ID = game.PlaceId
+
+game:GetService("GuiService").ErrorMessageChanged:Connect(function(msg)
+    if msg and msg ~= "" then
+        warn("⚠️ [BFF] Kicked: " .. msg)
+        wait(3)
+        pcall(function()
+            TeleportService:Teleport(PLACE_ID, LocalPlayer)
+        end)
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- 3️⃣ Reporter (Dashboard)
+-- ═══════════════════════════════════════
+spawn(function()
+    wait(3)
+    pcall(function()
+        loadstring(game:HttpGet(RAILWAY_URL .. "/script/gui"))()
+        print("✅ [BFF] Reporter loaded")
+    end)
+end)
+
+-- ═══════════════════════════════════════
+-- 4️⃣ Marines Selection
+-- ═══════════════════════════════════════
+spawn(function()
+    wait(5)
+    pcall(function()
+        loadstring(game:HttpGet(RAILWAY_URL .. "/script/marines_ultimate"))()
+        print("✅ [BFF] Marines script loaded")
+    end)
+end)
+
+-- ═══════════════════════════════════════
+-- 5️⃣ Auto Codes (يفعّل بعد ما يدخل اللعبة)
+-- ═══════════════════════════════════════
+spawn(function()
+    wait(15) -- انتظر بعد اختيار Marines
+    pcall(function()
+        loadstring(game:HttpGet(RAILWAY_URL .. "/script/codes"))()
+        print("✅ [BFF] Auto Codes loaded")
+    end)
+end)
+
+-- ═══════════════════════════════════════
+-- 6️⃣ Auto Stats
+-- ═══════════════════════════════════════
+spawn(function()
+    wait(20)
+    pcall(function()
+        loadstring(game:HttpGet(RAILWAY_URL .. "/script/stats"))()
+        print("✅ [BFF] Auto Stats loaded")
+    end)
+end)
+
+-- ═══════════════════════════════════════
+-- 7️⃣ Auto Farm (الأخير - بعد كل شي)
+-- ═══════════════════════════════════════
+spawn(function()
+    wait(25)
+    pcall(function()
+        loadstring(game:HttpGet(RAILWAY_URL .. "/script/farm"))()
+        print("✅ [BFF] Auto Farm loaded")
+    end)
+end)
+
+-- ═══════════════════════════════════════
+-- ✅ رسالة النهاية
+-- ═══════════════════════════════════════
+spawn(function()
+    wait(30)
+    StarterGui:SetCore("SendNotification", {
+        Title = "✅ BFF READY!";
+        Text = "كل الأنظمة تعمل! افتح الـ Dashboard";
+        Duration = 10;
+    })
+    
+    print("╔═══════════════════════════════════════╗")
+    print("║  ✅ كل الأنظمة تعمل بنجاح!         ║")
+    print("║                                     ║")
+    print("║  📊 Dashboard:                      ║")
+    print("║  " .. RAILWAY_URL)
+    print("╚═══════════════════════════════════════╝")
+end)
