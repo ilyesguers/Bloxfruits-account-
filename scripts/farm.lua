@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF FARM v10.0 - KILL AURA FINAL 🔥
+    🔥 BFF FARM v11.0 - REAL ATTACK 🔥
     ══════════════════════════════════════════════
-    - CFrame Attack (اللصق بجنب العدو)
-    - Tool:Activate() (أقوى طريقة M1)
-    - Multi-Remote Attack
-    - Kill Aura حقيقي
+    - Mouse.Hit على العدو
+    - Camera Lock على العدو  
+    - Tool:Activate() المضبوط
+    - VIM Click مع كل شي
     ══════════════════════════════════════════════
 ]]
 
@@ -18,6 +18,7 @@ local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
 -- ═══════════════════════════════════════
 -- إحداثيات الجزر
@@ -55,13 +56,13 @@ local ENEMIES_BY_LEVEL = {
 }
 
 StarterGui:SetCore("SendNotification", {
-    Title = "🔥 BFF v10.0";
-    Text = "Kill Aura Final - رح يشتغل!";
+    Title = "🔥 BFF v11.0";
+    Text = "Real Attack - رح يضرب!";
     Duration = 3;
 })
 
 print("╔═══════════════════════════════════╗")
-print("║  🔥 BFF v10.0 - KILL AURA       ║")
+print("║  🔥 BFF v11.0 - REAL ATTACK     ║")
 print("╚═══════════════════════════════════╝")
 
 -- ═══════════════════════════════════════
@@ -122,7 +123,7 @@ local function equipWeapon()
             local hum = getHumanoid()
             if hum then
                 hum:EquipTool(item)
-                wait(0.2)
+                wait(0.3)
                 return item
             end
         end
@@ -161,22 +162,35 @@ local function findEnemy(targetName)
 end
 
 -- ═══════════════════════════════════════
--- 💥 KILL AURA - الطريقة الحقيقية!
+-- 💥 REAL ATTACK - كل الطرق معاً
 -- ═══════════════════════════════════════
-local function attackEnemy(enemy)
+local function realAttack(enemy)
     if not enemy then return end
+    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+    if not eHRP then return end
     
     local tool = getEquippedTool()
     if not tool then return end
     
-    -- الطريقة الأقوى: Tool:Activate() (كأنك تضغط بيدك!)
     pcall(function()
+        -- 1️⃣ حرك الـ Mouse فوق العدو (المفتاح!)
+        Mouse.Hit = eHRP.CFrame
+        Mouse.Target = eHRP
+        
+        -- 2️⃣ فعّل الأداة
         tool:Activate()
+        
+        -- 3️⃣ Signal للـ Activated event
+        if tool:FindFirstChild("RemoteFunctionShoot") then
+            tool.RemoteFunctionShoot:InvokeServer("id", eHRP.Position)
+        end
     end)
     
-    -- طريقة إضافية: Mouse Click
+    -- 4️⃣ Virtual Click في وسط الشاشة
     pcall(function()
-        tool.Activated:Fire()
+        local vs = Camera.ViewportSize
+        VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, true, game, 0)
+        VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, false, game, 0)
     end)
 end
 
@@ -189,7 +203,7 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 -- ═══════════════════════════════════════
--- 🎯 الحلقة الرئيسية - KILL AURA
+-- 🎯 الحلقة الرئيسية
 -- ═══════════════════════════════════════
 getgenv().BFF_FARM_ACTIVE = true
 
@@ -206,7 +220,8 @@ spawn(function()
             
             local tool = equipWeapon()
             if not tool then
-                wait(1)
+                print("⚠️ [BFF] لا يوجد سلاح!")
+                wait(2)
                 return
             end
             
@@ -214,7 +229,6 @@ spawn(function()
             local enemy = findEnemy(targetName)
             
             if not enemy then
-                -- Teleport للجزيرة
                 local islandCF = ISLANDS[islandName]
                 if islandCF then
                     local dist = (hrp.Position - islandCF.Position).Magnitude
@@ -229,13 +243,13 @@ spawn(function()
                 return
             end
             
-            print("⚔️ [BFF] KILL AURA على: " .. targetName)
+            print("⚔️ [BFF] هدف: " .. targetName)
             
             local eHRP = enemy:FindFirstChild("HumanoidRootPart")
             local eHum = enemy:FindFirstChildOfClass("Humanoid")
             if not eHRP or not eHum then return end
             
-            -- 🎯 KILL AURA LOOP - CFrame كل frame + Attack
+            -- 🎯 KILL LOOP
             local killStart = tick()
             
             while enemy and enemy.Parent and eHum and eHum.Health > 0 
@@ -243,13 +257,18 @@ spawn(function()
                 if not eHRP.Parent then break end
                 if (tick() - killStart) > 20 then break end
                 
-                -- 💥 المفتاح السحري: CFrame اللاعب بجنب العدو مباشرة!
                 pcall(function()
-                    -- ضع اللاعب أمام العدو بمسافة 2 stud (نطاق M1)
-                    hrp.CFrame = eHRP.CFrame * CFrame.new(0, 0, -3)
+                    -- 1. اللصق بجنب العدو (خلفه عشان NPC ما يشوفنا)
+                    hrp.CFrame = eHRP.CFrame * CFrame.new(0, 2, -2.5)
                     
-                    -- اضرب بالـ Tool
-                    attackEnemy(enemy)
+                    -- 2. وجّه الكاميرا للعدو (مهم!)
+                    Camera.CFrame = CFrame.new(
+                        hrp.Position + Vector3.new(0, 5, 0),
+                        eHRP.Position
+                    )
+                    
+                    -- 3. اضرب بكل الطرق
+                    realAttack(enemy)
                 end)
                 
                 RunService.Heartbeat:Wait()
@@ -266,10 +285,10 @@ spawn(function()
     end
 end)
 
-print("✅ [BFF v10.0] KILL AURA ACTIVE!")
+print("✅ [BFF v11.0] REAL ATTACK READY!")
 
 StarterGui:SetCore("SendNotification", {
-    Title = "✅ BFF v10.0";
-    Text = "Kill Aura شغال - المونكي مات!";
+    Title = "✅ BFF v11.0";
+    Text = "Mouse.Hit + Camera + Tool = 💥";
     Duration = 5;
 })
