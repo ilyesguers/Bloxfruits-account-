@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF FARM v8.0 - PRECISION M1 🔥
+    🔥 BFF FARM v9.0 - FINAL NIGHT BUILD 🔥
     ══════════════════════════════════════════════
-    - كاميرا موجهة تحت للعدو (يضرب فعلاً)
-    - Hitbox 120 (نطاق ماكس)
-    - Animation خفيف + صوت طبيعي
-    - يضرب من فوق مباشرة
+    - Remote M1 مباشر (يضرب فعلاً)
+    - Hitbox معقول (30)
+    - كاميرا بعيدة (30 فوق)
+    - يستهدف Torso
     ══════════════════════════════════════════════
 ]]
 
@@ -24,9 +24,10 @@ local Camera = Workspace.CurrentCamera
 -- ═══════════════════════════════════════
 local FLY_SPEED = 200
 local FLY_HEIGHT = 100
-local ATTACK_HEIGHT = 12       -- أقرب للعدو (كان 20)
-local HITBOX_SIZE = 120        -- كبير جداً (كان 80)
-local M1_SPEED = 0.08          -- 12 ضربة/ثانية (أقل صخب)
+local ATTACK_HEIGHT = 15
+local CAMERA_DIST = 30
+local HITBOX_SIZE = 30
+local M1_SPEED = 0.1
 
 -- ═══════════════════════════════════════
 -- إحداثيات الجزر
@@ -67,13 +68,13 @@ local ENEMIES_BY_LEVEL = {
 }
 
 StarterGui:SetCore("SendNotification", {
-    Title = "🔥 BFF v8.0";
-    Text = "Precision M1 - يضرب فعلاً!";
+    Title = "🔥 BFF v9.0";
+    Text = "Final Build - نم بسلام!";
     Duration = 3;
 })
 
 print("╔═══════════════════════════════════╗")
-print("║  🔥 BFF v8.0 - PRECISION M1     ║")
+print("║  🔥 BFF v9.0 - NIGHT BUILD      ║")
 print("╚═══════════════════════════════════╝")
 
 -- ═══════════════════════════════════════
@@ -111,7 +112,7 @@ local function getTarget()
 end
 
 -- ═══════════════════════════════════════
--- 🎯 HITBOX EXPANDER (120 - ماكس!)
+-- Hitbox معقول (30)
 -- ═══════════════════════════════════════
 local function expandHitbox(enemy)
     if not enemy then return end
@@ -120,45 +121,10 @@ local function expandHitbox(enemy)
     
     pcall(function()
         eHRP.Size = Vector3.new(HITBOX_SIZE, HITBOX_SIZE, HITBOX_SIZE)
-        eHRP.Transparency = 0.9  -- شفاف جداً (شبه غير مرئي)
+        eHRP.Transparency = 0.9
         eHRP.CanCollide = false
         eHRP.Massless = true
     end)
-end
-
--- ═══════════════════════════════════════
--- 🎯 CAMERA LOCK - كاميرا موجهة على العدو
--- ═══════════════════════════════════════
-local cameraLockActive = false
-local cameraTarget = nil
-
-local function lockCameraOnTarget()
-    if cameraLockActive then return end
-    cameraLockActive = true
-    
-    spawn(function()
-        while cameraLockActive and getgenv().BFF_FARM_ACTIVE do
-            pcall(function()
-                if cameraTarget and cameraTarget.Parent then
-                    local eHRP = cameraTarget:FindFirstChild("HumanoidRootPart")
-                    local hrp = getHRP()
-                    if eHRP and hrp then
-                        -- الكاميرا فوق اللاعب وتنظر تحت للعدو مباشرة
-                        Camera.CFrame = CFrame.new(
-                            hrp.Position + Vector3.new(0, 5, 0),  -- الكاميرا فوق اللاعب
-                            eHRP.Position                         -- تنظر للعدو
-                        )
-                    end
-                end
-            end)
-            RunService.RenderStepped:Wait()
-        end
-    end)
-end
-
-local function unlockCamera()
-    cameraLockActive = false
-    cameraTarget = nil
 end
 
 -- ═══════════════════════════════════════
@@ -291,7 +257,7 @@ local function findEnemy(targetName)
 end
 
 -- ═══════════════════════════════════════
--- 💥 M1 SPAM
+-- 💥 M1 عبر Remote + Click
 -- ═══════════════════════════════════════
 local m1Active = false
 
@@ -302,13 +268,19 @@ local function startM1Spam()
     spawn(function()
         while m1Active and getgenv().BFF_FARM_ACTIVE do
             pcall(function()
-                -- كليك في منتصف الشاشة (على العدو تحت)
-                local vs = Camera.ViewportSize
-                local centerX = vs.X / 2
-                local centerY = vs.Y / 2
+                -- 1. Remote M1 (الطريقة الرسمية)
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                if remotes then
+                    local commE = remotes:FindFirstChild("CommE")
+                    if commE then
+                        commE:FireServer("Combat")
+                    end
+                end
                 
-                VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-                VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+                -- 2. Click في وسط الشاشة (احتياطي)
+                local vs = Camera.ViewportSize
+                VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, true, game, 0)
+                VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, false, game, 0)
             end)
             wait(M1_SPEED)
         end
@@ -325,7 +297,6 @@ end
 LocalPlayer.CharacterAdded:Connect(function()
     stopFlight()
     stopM1Spam()
-    unlockCamera()
     wait(3)
     print("🔄 [BFF] Respawned")
 end)
@@ -343,7 +314,6 @@ spawn(function()
             
             if not hrp or not hum or hum.Health <= 0 then
                 stopM1Spam()
-                unlockCamera()
                 wait(2)
                 return
             end
@@ -355,7 +325,6 @@ spawn(function()
             
             if not enemy then
                 stopM1Spam()
-                unlockCamera()
                 local islandPos = ISLANDS[islandName]
                 if islandPos then
                     local dist = (hrp.Position - islandPos).Magnitude
@@ -375,18 +344,11 @@ spawn(function()
             local eHum = enemy:FindFirstChildOfClass("Humanoid")
             if not eHRP or not eHum then return end
             
-            -- 🎯 وسّع Hitbox
             expandHitbox(enemy)
             
-            -- 🎯 ثبت الكاميرا على العدو
-            cameraTarget = enemy
-            lockCameraOnTarget()
-            
-            -- 🚀 طير فوق العدو
             local bv, bg = createFlight()
             if not bv then return end
             
-            -- 💥 M1 Spam
             startM1Spam()
             
             local killStart = tick()
@@ -394,30 +356,33 @@ spawn(function()
             while enemy and enemy.Parent and eHum and eHum.Health > 0 
                   and getgenv().BFF_FARM_ACTIVE do
                 if not eHRP.Parent then break end
-                if (tick() - killStart) > 15 then break end
+                if (tick() - killStart) > 20 then break end
                 
-                -- ثبت فوق العدو مباشرة (بدون إزاحة أفقية!)
+                -- ثبت فوق العدو
                 local targetPos = eHRP.Position + Vector3.new(0, ATTACK_HEIGHT, 0)
                 local myPos = hrp.Position
                 local diff = (targetPos - myPos)
                 
-                if diff.Magnitude > 1 then
-                    bv.Velocity = diff.Unit * math.min(200, diff.Magnitude * 15)
+                if diff.Magnitude > 2 then
+                    bv.Velocity = diff.Unit * math.min(150, diff.Magnitude * 10)
                 else
                     bv.Velocity = Vector3.new(0, 0, 0)
                 end
                 
-                -- اللاعب ينظر تحت للعدو
                 bg.CFrame = CFrame.new(myPos, eHRP.Position)
                 
-                -- كرر Hitbox
+                -- 🎯 الكاميرا بعيدة (30 studs فوق) وتنظر للعدو
+                Camera.CFrame = CFrame.new(
+                    eHRP.Position + Vector3.new(0, CAMERA_DIST, 0),
+                    eHRP.Position
+                )
+                
                 expandHitbox(enemy)
                 
-                wait(0.03)
+                wait(0.05)
             end
             
             stopM1Spam()
-            unlockCamera()
             print("💀 [BFF] Killed: " .. targetName)
         end)
         
@@ -429,10 +394,10 @@ spawn(function()
     end
 end)
 
-print("✅ [BFF v8.0] PRECISION M1 READY!")
+print("✅ [BFF v9.0] NIGHT BUILD READY!")
 
 StarterGui:SetCore("SendNotification", {
-    Title = "✅ BFF v8.0";
-    Text = "كاميرا موجهة + Hitbox 120!";
+    Title = "✅ BFF v9.0";
+    Text = "جاهز - نم بسلام يا شريك!";
     Duration = 5;
 })
