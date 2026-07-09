@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF FARM v6.0 - REMOTE ATTACK 🔥
+    🔥 BFF FARM v7.0 - M1 SPAMMER 🔥
     ══════════════════════════════════════════════
-    - يبقى بعيد + آمن (30 studs فوق)
-    - يضرب M1 عبر Remote (نطاق لا محدود)
-    - يستخدم سكيلات Z, X, C, V, F
-    - NPC ما يقدر يوصله
+    - M1 سريع جداً (كل 0.05 ثانية!)
+    - نطاق ضربة موسّع للماكس
+    - Hitbox Expander للأعداء
+    - بعيد وآمن من NPCs
     ══════════════════════════════════════════════
 ]]
 
@@ -23,8 +23,9 @@ local LocalPlayer = Players.LocalPlayer
 -- ═══════════════════════════════════════
 local FLY_SPEED = 200
 local FLY_HEIGHT = 100
-local SAFE_HEIGHT = 30       -- ارتفاع آمن فوق العدو
-local SAFE_DISTANCE = 20     -- مسافة أفقية آمنة
+local ATTACK_HEIGHT = 20      -- فوق العدو مباشرة
+local HITBOX_SIZE = 80        -- ← حجم Hitbox الكبير (المفتاح!)
+local M1_SPEED = 0.05         -- سرعة الـ M1 (كل 50 ملي ثانية!)
 
 -- ═══════════════════════════════════════
 -- إحداثيات الجزر
@@ -65,13 +66,13 @@ local ENEMIES_BY_LEVEL = {
 }
 
 StarterGui:SetCore("SendNotification", {
-    Title = "🔥 BFF v6.0";
-    Text = "Remote Attack Mode - آمن!";
+    Title = "🔥 BFF v7.0";
+    Text = "M1 Spammer نشط - جنوني!";
     Duration = 3;
 })
 
 print("╔═══════════════════════════════════╗")
-print("║  🔥 BFF v6.0 - REMOTE ATTACK    ║")
+print("║  🔥 BFF v7.0 - M1 SPAMMER       ║")
 print("╚═══════════════════════════════════╝")
 
 -- ═══════════════════════════════════════
@@ -106,6 +107,30 @@ local function getTarget()
         end
     end
     return "Monkey", "Jungle"
+end
+
+-- ═══════════════════════════════════════
+-- 🎯 HITBOX EXPANDER (المفتاح السحري!)
+-- ═══════════════════════════════════════
+local originalSizes = {}
+
+local function expandHitbox(enemy)
+    if not enemy then return end
+    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+    if not eHRP then return end
+    
+    pcall(function()
+        -- احفظ الحجم الأصلي
+        if not originalSizes[enemy] then
+            originalSizes[enemy] = eHRP.Size
+        end
+        
+        -- وسّع Hitbox
+        eHRP.Size = Vector3.new(HITBOX_SIZE, HITBOX_SIZE, HITBOX_SIZE)
+        eHRP.Transparency = 0.8
+        eHRP.CanCollide = false
+        eHRP.Massless = true
+    end)
 end
 
 -- ═══════════════════════════════════════
@@ -238,69 +263,45 @@ local function findEnemy(targetName)
 end
 
 -- ═══════════════════════════════════════
--- 💥 M1 ATTACK عبر Remote (نطاق لا محدود)
+-- 💥 M1 SPAM (نقر متواصل جنوني)
 -- ═══════════════════════════════════════
-local function m1Attack(enemy)
-    if not enemy then return end
-    local eHum = enemy:FindFirstChildOfClass("Humanoid")
-    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-    if not eHum or not eHRP then return end
+local m1Active = false
+
+local function startM1Spam()
+    if m1Active then return end
+    m1Active = true
     
-    pcall(function()
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        if not remotes then return end
-        
-        -- Blox Fruits Melee/M1 Remote
-        local commE = remotes:FindFirstChild("CommE")
-        if commE then
-            -- طرق M1 المختلفة
-            commE:FireServer("Combat", enemy)
-            commE:FireServer("Combat", enemy, "Slash")
-            commE:FireServer("Melee", enemy)
-            commE:FireServer("PunchHit", enemy)
+    spawn(function()
+        while m1Active and getgenv().BFF_FARM_ACTIVE do
+            pcall(function()
+                -- 1. Virtual Click (اللي تسويه أنت بيدك)
+                VIM:SendMouseButtonEvent(683, 384, 0, true, game, 1)
+                VIM:SendMouseButtonEvent(683, 384, 0, false, game, 1)
+                
+                -- 2. Remote M1 (احتياطي)
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                if remotes then
+                    local commE = remotes:FindFirstChild("CommE")
+                    if commE then
+                        commE:FireServer("Combat")
+                    end
+                end
+            end)
+            wait(M1_SPEED)
         end
-        
-        -- Direct Damage
-        local commF = remotes:FindFirstChild("CommF_")
-        if commF then
-            commF:InvokeServer("Damage", enemy, 999)
-            commF:InvokeServer("giveDamage", enemy, 999)
-        end
-    end)
-    
-    -- Fallback: كليك في الشاشة (يشتغل مع Tool العادي)
-    pcall(function()
-        VIM:SendMouseButtonEvent(500, 400, 0, true, game, 1)
-        wait(0.01)
-        VIM:SendMouseButtonEvent(500, 400, 0, false, game, 1)
     end)
 end
 
--- ═══════════════════════════════════════
--- 🎯 السكيلات (Z, X, C, V, F)
--- ═══════════════════════════════════════
-local skills = {
-    Enum.KeyCode.Z, 
-    Enum.KeyCode.X, 
-    Enum.KeyCode.C, 
-    Enum.KeyCode.V, 
-    Enum.KeyCode.F
-}
+local function stopM1Spam()
+    m1Active = false
+end
 
-local function useAllSkills(enemy)
-    if not enemy then return end
-    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-    if not eHRP then return end
-    
-    -- وجّه الكاميرا للعدو أولاً
-    pcall(function()
-        Workspace.CurrentCamera.CFrame = CFrame.new(
-            Workspace.CurrentCamera.CFrame.Position, 
-            eHRP.Position
-        )
-    end)
-    
-    -- استخدم كل السكيلات
+-- ═══════════════════════════════════════
+-- السكيلات
+-- ═══════════════════════════════════════
+local skills = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C}
+
+local function useSkills()
     for _, key in ipairs(skills) do
         pcall(function()
             VIM:SendKeyEvent(true, key, false, game)
@@ -316,6 +317,7 @@ end
 -- ═══════════════════════════════════════
 LocalPlayer.CharacterAdded:Connect(function()
     stopFlight()
+    stopM1Spam()
     wait(3)
     print("🔄 [BFF] Respawned")
 end)
@@ -332,6 +334,7 @@ spawn(function()
             local hum = getHumanoid()
             
             if not hrp or not hum or hum.Health <= 0 then
+                stopM1Spam()
                 wait(2)
                 return
             end
@@ -342,11 +345,12 @@ spawn(function()
             local enemy = findEnemy(targetName)
             
             if not enemy then
+                stopM1Spam()
                 local islandPos = ISLANDS[islandName]
                 if islandPos then
                     local dist = (hrp.Position - islandPos).Magnitude
                     if dist > 500 then
-                        print("✈️ [BFF] الطيران إلى: " .. islandName)
+                        print("✈️ [BFF] Fly to: " .. islandName)
                         flyToIsland(islandPos)
                     else
                         wait(2)
@@ -355,15 +359,21 @@ spawn(function()
                 return
             end
             
-            print("⚔️ [BFF] مهاجمة: " .. targetName)
+            print("⚔️ [BFF] Target: " .. targetName)
             
             local eHRP = enemy:FindFirstChild("HumanoidRootPart")
             local eHum = enemy:FindFirstChildOfClass("Humanoid")
             if not eHRP or not eHum then return end
             
-            -- 🚀 طير فوق + بعيد عن العدو (بمسافة آمنة)
+            -- 🎯 وسّع Hitbox
+            expandHitbox(enemy)
+            
+            -- 🚀 طير فوق العدو
             local bv, bg = createFlight()
             if not bv then return end
+            
+            -- 💥 ابدأ M1 Spam
+            startM1Spam()
             
             local killStart = tick()
             local skillCounter = 0
@@ -373,47 +383,51 @@ spawn(function()
                 if not eHRP.Parent then break end
                 if (tick() - killStart) > 15 then break end
                 
-                -- 🎯 ابقَ فوق العدو بارتفاع آمن (30) وبعيد أفقياً (20)
-                local safePos = eHRP.Position + Vector3.new(SAFE_DISTANCE, SAFE_HEIGHT, 0)
+                -- ثبت فوق العدو مباشرة
+                local targetPos = eHRP.Position + Vector3.new(0, ATTACK_HEIGHT, 0)
                 local myPos = hrp.Position
-                local diff = (safePos - myPos)
+                local diff = (targetPos - myPos)
                 
                 if diff.Magnitude > 2 then
-                    bv.Velocity = diff.Unit * math.min(150, diff.Magnitude * 8)
+                    bv.Velocity = diff.Unit * math.min(150, diff.Magnitude * 10)
                 else
                     bv.Velocity = Vector3.new(0, 0, 0)
                 end
                 
+                -- وجّه اللاعب والكاميرا للعدو
                 bg.CFrame = CFrame.new(myPos, eHRP.Position)
+                Workspace.CurrentCamera.CFrame = CFrame.new(
+                    myPos, eHRP.Position
+                )
                 
-                -- 💥 اضرب M1 عبر Remote (نطاق لا محدود!)
-                m1Attack(enemy)
+                -- Hitbox يعيد كل مرة (اللعبة تعيده)
+                expandHitbox(enemy)
                 
-                -- 🎯 استخدم السكيلات كل 3 ضربات
+                -- سكيلات كل 15 ملي ثانية
                 skillCounter = skillCounter + 1
-                if skillCounter % 3 == 0 then
-                    useAllSkills(enemy)
+                if skillCounter % 30 == 0 then
+                    useSkills()
                 end
                 
-                wait(0.1)
+                wait(0.03)
             end
             
+            stopM1Spam()
             print("💀 [BFF] Killed: " .. targetName)
-            stopFlight()
         end)
         
         if not success then
             warn("⚠️ [BFF] " .. tostring(err))
         end
         
-        wait(0.3)
+        wait(0.2)
     end
 end)
 
-print("✅ [BFF v6.0] Remote Attack Ready")
+print("✅ [BFF v7.0] M1 SPAMMER READY!")
 
 StarterGui:SetCore("SendNotification", {
-    Title = "✅ BFF v6.0";
-    Text = "يضرب من بعيد - آمن تماماً!";
+    Title = "✅ BFF v7.0";
+    Text = "M1 كل 50ms + Hitbox 80!";
     Duration = 5;
 })
