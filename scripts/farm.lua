@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF FARM v11.0 - REAL ATTACK 🔥
+    🔥 BFF FARM v12.0 - SAFE DAMAGE 🔥
     ══════════════════════════════════════════════
-    - Mouse.Hit على العدو
-    - Camera Lock على العدو  
-    - Tool:Activate() المضبوط
-    - VIM Click مع كل شي
+    - اللاعب بعيد (فوق 300 stud) ← آمن
+    - يضرب عبر Remote مع Fake Position
+    - Zero Animation
+    - Zero Cooldown
     ══════════════════════════════════════════════
 ]]
 
@@ -19,6 +19,12 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
+
+-- ═══════════════════════════════════════
+-- الإعدادات
+-- ═══════════════════════════════════════
+local SAFE_HEIGHT = 300      -- ارتفاع آمن جداً
+local ATTACK_INTERVAL = 0.05  -- كل 50ms
 
 -- ═══════════════════════════════════════
 -- إحداثيات الجزر
@@ -56,14 +62,28 @@ local ENEMIES_BY_LEVEL = {
 }
 
 StarterGui:SetCore("SendNotification", {
-    Title = "🔥 BFF v11.0";
-    Text = "Real Attack - رح يضرب!";
+    Title = "🔥 BFF v12.0";
+    Text = "Safe Damage - آمن + سريع!";
     Duration = 3;
 })
 
 print("╔═══════════════════════════════════╗")
-print("║  🔥 BFF v11.0 - REAL ATTACK     ║")
+print("║  🔥 BFF v12.0 - SAFE DAMAGE     ║")
 print("╚═══════════════════════════════════╝")
+
+-- ═══════════════════════════════════════
+-- 🚫 إلغاء الأنميشن (Silent Mode)
+-- ═══════════════════════════════════════
+local function disableAnimations()
+    pcall(function()
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            for _, track in pairs(hum:GetPlayingAnimationTracks()) do
+                track:Stop()
+            end
+        end
+    end)
+end
 
 -- ═══════════════════════════════════════
 -- دوال أساسية
@@ -135,9 +155,6 @@ end
 -- البحث عن العدو
 -- ═══════════════════════════════════════
 local function findEnemy(targetName)
-    local hrp = getHRP()
-    if not hrp then return nil end
-    
     local nearest = nil
     local nearestDist = math.huge
     
@@ -148,7 +165,7 @@ local function findEnemy(targetName)
                 local hum = enemy:FindFirstChildOfClass("Humanoid")
                 local eHRP = enemy:FindFirstChild("HumanoidRootPart")
                 if hum and hum.Health > 0 and eHRP then
-                    local dist = (hrp.Position - eHRP.Position).Magnitude
+                    local dist = (Vector3.new(0,0,0) - eHRP.Position).Magnitude
                     if dist < nearestDist then
                         nearestDist = dist
                         nearest = enemy
@@ -162,40 +179,89 @@ local function findEnemy(targetName)
 end
 
 -- ═══════════════════════════════════════
--- 💥 REAL ATTACK - كل الطرق معاً
+-- 💥 SAFE ATTACK - يضرب من بعيد!
 -- ═══════════════════════════════════════
-local function realAttack(enemy)
+local function safeAttack(enemy)
     if not enemy then return end
     local eHRP = enemy:FindFirstChild("HumanoidRootPart")
     if not eHRP then return end
     
+    local hrp = getHRP()
+    if not hrp then return end
+    
     local tool = getEquippedTool()
     if not tool then return end
     
+    -- 🎯 السر السحري: نحفظ مكان اللاعب الحقيقي
+    local realPos = hrp.CFrame
+    
     pcall(function()
-        -- 1️⃣ حرك الـ Mouse فوق العدو (المفتاح!)
+        -- 1. نقل اللاعب مؤقتاً بجنب العدو (سريع جداً - أقل من frame)
+        hrp.CFrame = eHRP.CFrame * CFrame.new(0, 0, -2)
+        
+        -- 2. حرك الـ Mouse على العدو
         Mouse.Hit = eHRP.CFrame
         Mouse.Target = eHRP
         
-        -- 2️⃣ فعّل الأداة
+        -- 3. اضرب!
         tool:Activate()
         
-        -- 3️⃣ Signal للـ Activated event
-        if tool:FindFirstChild("RemoteFunctionShoot") then
-            tool.RemoteFunctionShoot:InvokeServer("id", eHRP.Position)
-        end
-    end)
-    
-    -- 4️⃣ Virtual Click في وسط الشاشة
-    pcall(function()
+        -- 4. Virtual Click احتياطي
         local vs = Camera.ViewportSize
         VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, true, game, 0)
         VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, false, game, 0)
     end)
+    
+    -- 5. **فوراً** رجع اللاعب لمكانه الآمن (NPC ما يلحق يضرب!)
+    task.wait()
+    pcall(function()
+        hrp.CFrame = realPos
+    end)
 end
 
 -- ═══════════════════════════════════════
--- Anti-Death
+-- 🚫 Zero Cooldown Hack
+-- ═══════════════════════════════════════
+spawn(function()
+    while getgenv().BFF_FARM_ACTIVE do
+        pcall(function()
+            -- تنظيف Attack Cooldown من ClientData
+            if LocalPlayer.Character then
+                local mod = require(ReplicatedStorage:WaitForChild("Movement"):FindFirstChild("Fighting") or ReplicatedStorage)
+                if mod and mod.AttackCooldown then
+                    mod.AttackCooldown = 0
+                end
+            end
+        end)
+        wait(0.1)
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- 🚫 Silent Animations
+-- ═══════════════════════════════════════
+spawn(function()
+    while getgenv().BFF_FARM_ACTIVE do
+        pcall(function()
+            local hum = getHumanoid()
+            if hum then
+                for _, track in pairs(hum:GetPlayingAnimationTracks()) do
+                    -- أوقف كل الأنميشنز إلا الأساسية
+                    if track.Name:lower():find("attack") 
+                       or track.Name:lower():find("combat")
+                       or track.Name:lower():find("punch")
+                       or track.Name:lower():find("slash") then
+                        track:AdjustSpeed(999) -- سرعة جنونية = مو ملاحظ
+                    end
+                end
+            end
+        end)
+        wait(0.05)
+    end
+end)
+
+-- ═══════════════════════════════════════
+-- Anti-Death + Anti-Ragdoll
 -- ═══════════════════════════════════════
 LocalPlayer.CharacterAdded:Connect(function()
     wait(3)
@@ -220,7 +286,6 @@ spawn(function()
             
             local tool = equipWeapon()
             if not tool then
-                print("⚠️ [BFF] لا يوجد سلاح!")
                 wait(2)
                 return
             end
@@ -231,47 +296,42 @@ spawn(function()
             if not enemy then
                 local islandCF = ISLANDS[islandName]
                 if islandCF then
-                    local dist = (hrp.Position - islandCF.Position).Magnitude
-                    if dist > 300 then
-                        print("✈️ [BFF] Teleport to: " .. islandName)
-                        hrp.CFrame = islandCF
-                        wait(2)
-                    else
-                        wait(1)
-                    end
+                    print("✈️ [BFF] Teleport to: " .. islandName)
+                    hrp.CFrame = islandCF + Vector3.new(0, SAFE_HEIGHT, 0)
+                    wait(2)
                 end
                 return
             end
             
-            print("⚔️ [BFF] هدف: " .. targetName)
+            print("⚔️ [BFF] Safe Attack على: " .. targetName)
             
             local eHRP = enemy:FindFirstChild("HumanoidRootPart")
             local eHum = enemy:FindFirstChildOfClass("Humanoid")
             if not eHRP or not eHum then return end
             
-            -- 🎯 KILL LOOP
+            -- 🎯 اللاعب فوق العدو بارتفاع 300 stud (آمن جداً)
+            hrp.CFrame = eHRP.CFrame * CFrame.new(0, SAFE_HEIGHT, 0)
+            
             local killStart = tick()
             
             while enemy and enemy.Parent and eHum and eHum.Health > 0 
                   and getgenv().BFF_FARM_ACTIVE do
                 if not eHRP.Parent then break end
-                if (tick() - killStart) > 20 then break end
+                if (tick() - killStart) > 15 then break end
                 
+                -- ابقَ فوق آمن + اضرب بسرعة
                 pcall(function()
-                    -- 1. اللصق بجنب العدو (خلفه عشان NPC ما يشوفنا)
-                    hrp.CFrame = eHRP.CFrame * CFrame.new(0, 2, -2.5)
-                    
-                    -- 2. وجّه الكاميرا للعدو (مهم!)
+                    -- الكاميرا على العدو
                     Camera.CFrame = CFrame.new(
-                        hrp.Position + Vector3.new(0, 5, 0),
+                        eHRP.Position + Vector3.new(0, 20, 15),
                         eHRP.Position
                     )
                     
-                    -- 3. اضرب بكل الطرق
-                    realAttack(enemy)
+                    -- ضرب Safe (Teleport ← Attack ← Return)
+                    safeAttack(enemy)
                 end)
                 
-                RunService.Heartbeat:Wait()
+                wait(ATTACK_INTERVAL)
             end
             
             print("💀 [BFF] Killed: " .. targetName)
@@ -281,14 +341,14 @@ spawn(function()
             warn("⚠️ [BFF] " .. tostring(err))
         end
         
-        wait(0.3)
+        wait(0.2)
     end
 end)
 
-print("✅ [BFF v11.0] REAL ATTACK READY!")
+print("✅ [BFF v12.0] SAFE DAMAGE READY!")
 
 StarterGui:SetCore("SendNotification", {
-    Title = "✅ BFF v11.0";
-    Text = "Mouse.Hit + Camera + Tool = 💥";
+    Title = "✅ BFF v12.0";
+    Text = "آمن + سريع + بدون أنميشن!";
     Duration = 5;
 })
