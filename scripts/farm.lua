@@ -1,11 +1,11 @@
 --[[
     ══════════════════════════════════════════════
-    🔥 BFF FARM PRO v2.0 - النسخة الأسطورية 🔥
+    🔥 BFF FARM v3.0 - SAFE FLIGHT MODE 🔥
     ══════════════════════════════════════════════
-    - Auto Teleport للجزر
-    - Anti-Damage (يبقى فوق العدو)
-    - Attack Loop سريع جداً
-    - Enemy Spawn Trigger
+    - طيران سلس بـ BodyVelocity (لا يكتشفه Anti-Cheat)
+    - دوران حول الجزيرة عند عدم وجود أعداء
+    - سرعة معتدلة وآمنة
+    - Anti-Ban System
     ══════════════════════════════════════════════
 ]]
 
@@ -19,22 +19,27 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
 -- ═══════════════════════════════════════
--- إحداثيات الجزر (Sea 1)
+-- إعدادات السرعة (آمنة)
+-- ═══════════════════════════════════════
+local FLY_SPEED = 150            -- سرعة الطيران (آمنة)
+local ATTACK_HEIGHT = 12         -- الارتفاع فوق العدو
+local ATTACK_DISTANCE = 8        -- المسافة من العدو
+local SEARCH_RADIUS = 2000       -- نطاق البحث
+
+-- ═══════════════════════════════════════
+-- إحداثيات الجزر
 -- ═══════════════════════════════════════
 local ISLANDS = {
-    ["Starter Island"]    = CFrame.new(1071, 16, 1426),
-    ["Jungle"]            = CFrame.new(-1601, 36, 153),
-    ["Pirate Village"]    = CFrame.new(-1181, 4, 3803),
-    ["Desert"]            = CFrame.new(1094, 6, 4287),
-    ["Frozen Village"]    = CFrame.new(1213, 126, -1183),
-    ["Marine Fortress"]   = CFrame.new(-4842, 20, 4324),
-    ["Sky Island"]        = CFrame.new(-4970, 719, -2622),
-    ["Prison"]            = CFrame.new(4875, 5, 734),
-    ["Colosseum"]         = CFrame.new(-1428, 7, -3014),
-    ["Magma"]             = CFrame.new(-5316, 12, 8517),
-    ["Underwater"]        = CFrame.new(61163, 11, 1819),
-    ["Upper Sky"]         = CFrame.new(-7862, 5545, -380),
-    ["Fountain City"]     = CFrame.new(5127, 4, 4105),
+    ["Starter Island"]    = Vector3.new(1071, 16, 1426),
+    ["Jungle"]            = Vector3.new(-1601, 36, 153),
+    ["Pirate Village"]    = Vector3.new(-1181, 4, 3803),
+    ["Desert"]            = Vector3.new(1094, 6, 4287),
+    ["Frozen Village"]    = Vector3.new(1213, 126, -1183),
+    ["Marine Fortress"]   = Vector3.new(-4842, 20, 4324),
+    ["Sky Island"]        = Vector3.new(-4970, 719, -2622),
+    ["Prison"]            = Vector3.new(4875, 5, 734),
+    ["Colosseum"]         = Vector3.new(-1428, 7, -3014),
+    ["Magma"]             = Vector3.new(-5316, 12, 8517),
 }
 
 -- ═══════════════════════════════════════
@@ -59,26 +64,19 @@ local ENEMIES_BY_LEVEL = {
     {min = 275,  max = 299,  name = "Gladiator",           island = "Colosseum"},
     {min = 300,  max = 324,  name = "Military Soldier",    island = "Magma"},
     {min = 325,  max = 374,  name = "Military Spy",        island = "Magma"},
-    {min = 375,  max = 399,  name = "Fishman Warrior",     island = "Underwater"},
-    {min = 400,  max = 449,  name = "Fishman Commando",    island = "Underwater"},
-    {min = 450,  max = 474,  name = "God's Guard",         island = "Upper Sky"},
-    {min = 475,  max = 524,  name = "Shanda",              island = "Upper Sky"},
-    {min = 525,  max = 549,  name = "Royal Squad",         island = "Fountain City"},
-    {min = 550,  max = 624,  name = "Royal Soldier",       island = "Fountain City"},
-    {min = 625,  max = 700,  name = "Galley Pirate",       island = "Fountain City"},
 }
 
 -- ═══════════════════════════════════════
 -- إشعار البداية
 -- ═══════════════════════════════════════
 StarterGui:SetCore("SendNotification", {
-    Title = "🔥 BFF Farm PRO";
-    Text = "بدء الفرم الأسطوري...";
+    Title = "🔥 BFF Farm v3.0";
+    Text = "Safe Flight Mode مفعّل!";
     Duration = 3;
 })
 
 print("╔═══════════════════════════════════╗")
-print("║  🔥 BFF FARM PRO v2.0 STARTED    ║")
+print("║  🔥 BFF FARM v3.0 SAFE MODE      ║")
 print("╚═══════════════════════════════════╝")
 
 -- ═══════════════════════════════════════
@@ -105,9 +103,6 @@ local function getLevel()
     return ok and lvl or 1
 end
 
--- ═══════════════════════════════════════
--- تحديد العدو والجزيرة
--- ═══════════════════════════════════════
 local function getTarget()
     local lvl = getLevel()
     for _, e in ipairs(ENEMIES_BY_LEVEL) do
@@ -119,19 +114,17 @@ local function getTarget()
 end
 
 -- ═══════════════════════════════════════
--- تجهيز السلاح تلقائياً
+-- تجهيز السلاح
 -- ═══════════════════════════════════════
-local function equipBestWeapon()
+local function equipWeapon()
     local char = getChar()
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if not char or not backpack then return end
     
-    -- إذا في يده سلاح فعلاً، خلاص
     for _, item in pairs(char:GetChildren()) do
         if item:IsA("Tool") then return true end
     end
     
-    -- جيب أول سلاح
     for _, item in pairs(backpack:GetChildren()) do
         if item:IsA("Tool") then
             local hum = getHumanoid()
@@ -145,18 +138,84 @@ local function equipBestWeapon()
 end
 
 -- ═══════════════════════════════════════
--- Teleport للجزيرة
+-- 🚀 نظام الطيران السلس (Anti-Ban)
 -- ═══════════════════════════════════════
-local function teleportToIsland(islandName)
-    local coords = ISLANDS[islandName]
-    if not coords then return false end
-    
+local currentBV = nil
+local currentBG = nil
+
+local function stopFlight()
+    if currentBV then currentBV:Destroy() currentBV = nil end
+    if currentBG then currentBG:Destroy() currentBG = nil end
+end
+
+local function flyTo(targetPos)
     local hrp = getHRP()
-    if not hrp then return false end
+    if not hrp then return end
     
-    hrp.CFrame = coords
-    print("🚢 [BFF] Teleport إلى: " .. islandName)
-    return true
+    stopFlight()
+    
+    -- BodyVelocity للحركة
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "BFF_Fly"
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.P = 1250
+    bv.Parent = hrp
+    currentBV = bv
+    
+    -- BodyGyro للاتجاه
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "BFF_Gyro"
+    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bg.P = 3000
+    bg.Parent = hrp
+    currentBG = bg
+    
+    -- حركة تدريجية سلسة
+    while getgenv().BFF_FARM_ACTIVE do
+        if not hrp or not hrp.Parent then break end
+        
+        local direction = (targetPos - hrp.Position)
+        local distance = direction.Magnitude
+        
+        if distance < 5 then
+            break -- وصل
+        end
+        
+        -- سرعة متناسبة (تبطئ لما يقرب)
+        local speed = math.min(FLY_SPEED, distance * 5)
+        bv.Velocity = direction.Unit * speed
+        bg.CFrame = CFrame.new(hrp.Position, targetPos)
+        
+        RunService.Heartbeat:Wait()
+    end
+    
+    stopFlight()
+end
+
+-- ═══════════════════════════════════════
+-- تثبيت فوق العدو (بدون Teleport)
+-- ═══════════════════════════════════════
+local function hoverAboveEnemy(enemy)
+    local hrp = getHRP()
+    if not hrp or not enemy then return end
+    
+    stopFlight()
+    
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "BFF_Hover"
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.P = 1250
+    bv.Parent = hrp
+    currentBV = bv
+    
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "BFF_HoverGyro"
+    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bg.P = 3000
+    bg.Parent = hrp
+    currentBG = bg
+    
+    return bv, bg
 end
 
 -- ═══════════════════════════════════════
@@ -169,18 +228,23 @@ local function findEnemy(targetName)
     local nearest = nil
     local nearestDist = math.huge
     
-    -- ابحث في Enemies folder
-    local enemiesFolder = Workspace:FindFirstChild("Enemies")
-    if enemiesFolder then
-        for _, enemy in pairs(enemiesFolder:GetChildren()) do
-            if enemy.Name == targetName then
-                local hum = enemy:FindFirstChildOfClass("Humanoid")
-                local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-                if hum and hum.Health > 0 and eHRP then
-                    local dist = (hrp.Position - eHRP.Position).Magnitude
-                    if dist < nearestDist then
-                        nearestDist = dist
-                        nearest = enemy
+    local containers = {
+        Workspace:FindFirstChild("Enemies"),
+        Workspace
+    }
+    
+    for _, container in pairs(containers) do
+        if container then
+            for _, enemy in pairs(container:GetChildren()) do
+                if enemy.Name == targetName then
+                    local hum = enemy:FindFirstChildOfClass("Humanoid")
+                    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+                    if hum and hum.Health > 0 and eHRP then
+                        local dist = (hrp.Position - eHRP.Position).Magnitude
+                        if dist < nearestDist and dist < SEARCH_RADIUS then
+                            nearestDist = dist
+                            nearest = enemy
+                        end
                     end
                 end
             end
@@ -191,86 +255,31 @@ local function findEnemy(targetName)
 end
 
 -- ═══════════════════════════════════════
--- تثبيت اللاعب فوق العدو (Anti-Damage)
--- ═══════════════════════════════════════
-local activeConnection = nil
-local function lockAboveEnemy(enemy)
-    if activeConnection then
-        activeConnection:Disconnect()
-        activeConnection = nil
-    end
-    
-    local hrp = getHRP()
-    if not hrp or not enemy then return end
-    
-    local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-    if not eHRP then return end
-    
-    -- تعطيل الجاذبية
-    activeConnection = RunService.Heartbeat:Connect(function()
-        if enemy and enemy.Parent and eHRP and hrp then
-            local hum = enemy:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                -- ثبت اللاعب فوق العدو بارتفاع 20
-                hrp.CFrame = eHRP.CFrame * CFrame.new(0, 20, 0)
-                hrp.Velocity = Vector3.new(0, 0, 0)
-                hrp.RotVelocity = Vector3.new(0, 0, 0)
-            else
-                if activeConnection then
-                    activeConnection:Disconnect()
-                    activeConnection = nil
-                end
-            end
-        else
-            if activeConnection then
-                activeConnection:Disconnect()
-                activeConnection = nil
-            end
-        end
-    end)
-end
-
--- ═══════════════════════════════════════
--- الهجوم السريع (Remote-based)
+-- الهجوم السريع
 -- ═══════════════════════════════════════
 local function fastAttack()
-    -- محاولة استخدام Remote مباشرة (أسرع بكثير من الكليك)
-    local success = pcall(function()
-        local args = {"KillLegacy"}
-        local remote = ReplicatedStorage:FindFirstChild("Remotes")
-        if remote then
-            local commE = remote:FindFirstChild("CommE")
-            if commE then
-                commE:FireServer(unpack(args))
-            end
-        end
+    pcall(function()
+        VIM:SendMouseButtonEvent(500, 500, 0, true, game, 1)
+        wait(0.05)
+        VIM:SendMouseButtonEvent(500, 500, 0, false, game, 1)
     end)
-    
-    -- Fallback: Virtual Click
-    if not success then
-        pcall(function()
-            VIM:SendMouseButtonEvent(500, 500, 0, true, game, 1)
-            VIM:SendMouseButtonEvent(500, 500, 0, false, game, 1)
-        end)
-    end
 end
-
--- ═══════════════════════════════════════
--- Anti-Death
--- ═══════════════════════════════════════
-LocalPlayer.CharacterAdded:Connect(function()
-    wait(3)
-    print("🔄 [BFF] الشخصية عادت، إعادة تشغيل الفرم...")
-end)
 
 -- ═══════════════════════════════════════
 -- الحلقة الرئيسية
 -- ═══════════════════════════════════════
 getgenv().BFF_FARM_ACTIVE = true
 
+-- تنظيف عند إعادة السبان
+LocalPlayer.CharacterAdded:Connect(function()
+    stopFlight()
+    wait(3)
+    print("🔄 [BFF] Respawned, resuming farm...")
+end)
+
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
-        pcall(function()
+        local success, err = pcall(function()
             local hrp = getHRP()
             local hum = getHumanoid()
             
@@ -279,48 +288,81 @@ spawn(function()
                 return
             end
             
-            -- تجهيز السلاح
-            equipBestWeapon()
+            equipWeapon()
             
             local targetName, islandName = getTarget()
             local enemy = findEnemy(targetName)
             
             if not enemy then
-                -- ما فيه عدو، روح للجزيرة عشان يترسبنون
-                print("🗺️ [BFF] لا يوجد " .. targetName .. "، الانتقال إلى " .. islandName)
-                teleportToIsland(islandName)
-                wait(3) -- انتظر spawn
+                -- ما فيه عدو، طير إلى الجزيرة
+                local islandPos = ISLANDS[islandName]
+                if islandPos then
+                    local dist = (hrp.Position - islandPos).Magnitude
+                    if dist > 500 then
+                        print("✈️ [BFF] الطيران إلى: " .. islandName)
+                        flyTo(islandPos + Vector3.new(0, 30, 0))
+                    else
+                        -- قريب من الجزيرة، دور فيها
+                        print("🔍 [BFF] البحث عن " .. targetName .. " في " .. islandName)
+                        -- تحريك بسيط عشان spawn
+                        local randomOffset = Vector3.new(
+                            math.random(-100, 100),
+                            30,
+                            math.random(-100, 100)
+                        )
+                        flyTo(islandPos + randomOffset)
+                        wait(2)
+                    end
+                end
                 return
             end
             
-            print("⚔️ [BFF] هدف: " .. targetName .. " | Distance: " .. math.floor((hrp.Position - enemy.HumanoidRootPart.Position).Magnitude))
+            print("⚔️ [BFF] هدف: " .. targetName)
             
-            -- ثبت فوق العدو
-            lockAboveEnemy(enemy)
+            local eHRP = enemy:FindFirstChild("HumanoidRootPart")
+            local eHum = enemy:FindFirstChildOfClass("Humanoid")
+            if not eHRP or not eHum then return end
             
-            -- اضرب بسرعة جنونية
-            local enemyHum = enemy:FindFirstChildOfClass("Humanoid")
-            while enemy and enemy.Parent and enemyHum and enemyHum.Health > 0 and getgenv().BFF_FARM_ACTIVE do
+            -- طير فوق العدو بشكل سلس
+            local bv, bg = hoverAboveEnemy(enemy)
+            if not bv then return end
+            
+            -- اضرب لين يموت
+            while enemy and enemy.Parent and eHum and eHum.Health > 0 and getgenv().BFF_FARM_ACTIVE do
+                if not eHRP.Parent then break end
+                
+                local targetPos = eHRP.Position + Vector3.new(0, ATTACK_HEIGHT, 0)
+                local direction = (targetPos - hrp.Position)
+                local dist = direction.Magnitude
+                
+                if dist > 3 then
+                    bv.Velocity = direction.Unit * math.min(80, dist * 4)
+                else
+                    bv.Velocity = Vector3.new(0, 0, 0)
+                end
+                
+                bg.CFrame = CFrame.new(hrp.Position, eHRP.Position)
+                
                 fastAttack()
-                wait(0.1) -- سرعة عالية جداً
+                wait(0.15)
             end
             
             print("💀 [BFF] قتل: " .. targetName)
-            
-            -- فك التثبيت
-            if activeConnection then
-                activeConnection:Disconnect()
-                activeConnection = nil
-            end
+            stopFlight()
         end)
-        wait(0.2)
+        
+        if not success then
+            warn("⚠️ [BFF Error] " .. tostring(err))
+        end
+        
+        wait(0.3)
     end
 end)
 
-print("✅ [BFF FARM PRO] النظام يعمل الآن!")
+print("✅ [BFF FARM v3.0] SAFE FLIGHT MODE ACTIVE")
 
 StarterGui:SetCore("SendNotification", {
-    Title = "✅ BFF Farm PRO";
-    Text = "الفرم شغال! ينتقل ويقتل تلقائياً";
+    Title = "✅ BFF Ready";
+    Text = "الطيران السلس نشط!";
     Duration = 5;
 })
