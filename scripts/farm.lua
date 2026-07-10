@@ -1,14 +1,15 @@
 --[[
     ══════════════════════════════════════════════════════════════
-    🔥 BFF FARM v17.0 - QUEST + SPEED + MOVEMENT FIX 🔥
+    🔥 BFF FARM v18.0 - INTELLIGENT QUEST SYSTEM 🔥
     ══════════════════════════════════════════════════════════════
     
-    ✅ نظام Quest كامل (يأخذ المهمة تلقائياً)
-    ✅ يرجع للعدو بعد كل قتل
-    ✅ سرعة ضربات محسّنة (مش ثقيلة)
-    ✅ يتحقق من الليفل المسموح للمهمة
-    ✅ حركة مستمرة (لا يتوقف أبداً)
-    ✅ iPhone 13 محسّن
+    ✅ نظام Quest حقيقي (مثل Redz Hub / Rip Indra)
+    ✅ يذهب لـ NPC الـ Quest أولاً (وليس العدو مباشرة!)
+    ✅ ينتظر تفعيل الـ Quest قبل الفرم
+    ✅ يعرف متى ينتقل للجزيرة التالية (بعد اكتمال Quest)
+    ✅ سرعة قتل ممتازة (M1 Combat System صحيح)
+    ✅ Bring Mobs (يجذب الأعداء إليك بدل الطيران)
+    ✅ Auto Return (يرجع للنقطة بعد كل قتل)
     
     ══════════════════════════════════════════════════════════════
 ]]
@@ -31,7 +32,6 @@ local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local VIM = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
-local TeleportService = game:GetService("TeleportService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -39,30 +39,22 @@ local Camera = Workspace.CurrentCamera
 -- ═══════════════════════════════════════════════════════════
 -- ⚙️ إعدادات
 -- ═══════════════════════════════════════════════════════════
-local CONFIG = {
-    UNDERGROUND_OFFSET    = -5,
-    ATTACK_SPEED          = 0.1,        -- أبطأ قليلاً = أخف على iPhone
-    KILL_TIMEOUT          = 25,
-    SPAWN_MOVE_RADIUS     = 100,
-    TELEPORT_HEIGHT       = 25,
-    SEARCH_WAIT           = 2,
-    GC_BYPASS_INTERVAL    = 0.2,
-    ANIMATION_SPEED       = 3,
-    SEA_TRAVEL_WAIT       = 8,
-    QUEST_DISTANCE        = 50,         -- مسافة أخذ Quest من NPC
-    LOOP_DELAY            = 0.3,        -- تأخير بين كل دورة
+local CFG = {
+    ATTACK_SPEED    = 0.1,
+    KILL_TIMEOUT    = 30,
+    UNDERGROUND_Y   = -3,      -- عمق تحت العدو (كان -5 كثير)
+    TELEPORT_HEIGHT = 15,
+    QUEST_CHECK     = 2,       -- تحقق Quest كل ثانيتين
+    BRING_MOBS      = true,    -- جذب الأعداء بدل الطيران لهم
+    ANIMATION_SPEED = 2.5,
 }
 
 -- ═══════════════════════════════════════════════════════════
--- 📢 نظام التسجيل
+-- 📢 التسجيل
 -- ═══════════════════════════════════════════════════════════
-local function notify(title, text, duration)
+local function notify(t, x, d)
     pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title or "Farm",
-            Text = text or "",
-            Duration = duration or 5,
-        })
+        StarterGui:SetCore("SendNotification", {Title=t, Text=x, Duration=d or 3})
     end)
 end
 
@@ -71,137 +63,645 @@ local function log(msg)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🌊 البحر الحالي
+-- 🌊 البحر
 -- ═══════════════════════════════════════════════════════════
-local SEA_IDS = {
-    [2753915549] = 1,
-    [4442272183] = 2,
-    [7449423635] = 3,
-}
-
 local function getCurrentSea()
-    return SEA_IDS[game.PlaceId] or 1
+    local pid = game.PlaceId
+    if pid == 2753915549 then return 1
+    elseif pid == 4442272183 then return 2
+    elseif pid == 7449423635 then return 3 end
+    return 1
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🗺️ إحداثيات الجزر (Update 24)
--- ═══════════════════════════════════════════════════════════
-local ISLANDS = {
-    -- Sea 1
-    ["Jungle"]             = CFrame.new(-1601, 40, 153),
-    ["Pirate Village"]     = CFrame.new(-1181, 10, 3803),
-    ["Desert"]             = CFrame.new(1094, 10, 4287),
-    ["Frozen Village"]     = CFrame.new(1213, 130, -1183),
-    ["Marine Fortress"]    = CFrame.new(-4842, 25, 4324),
-    ["Sky Island"]         = CFrame.new(-4970, 725, -2622),
-    ["Prison"]             = CFrame.new(4875, 10, 734),
-    ["Colosseum"]          = CFrame.new(-1428, 15, -3014),
-    ["Magma Village"]      = CFrame.new(-5316, 20, 8517),
-    ["Underwater City"]    = CFrame.new(61163, 11, 1819),
-    ["Upper Skylands"]     = CFrame.new(-7862, 5545, -380),
-    ["Fountain City"]      = CFrame.new(5127, 4, 4105),
-    -- Sea 2
-    ["Kingdom of Rose"]    = CFrame.new(-427, 72, 1836),
-    ["Green Zone"]         = CFrame.new(-2842, 100, 5320),
-    ["Graveyard"]          = CFrame.new(-5390, 46, -793),
-    ["Snow Mountain"]      = CFrame.new(597, 401, -5371),
-    ["Hot and Cold"]       = CFrame.new(-5686, 8, -5254),
-    ["Cursed Ship"]        = CFrame.new(923, 125, 32844),
-    ["Ice Castle"]         = CFrame.new(6148, 294, -6741),
-    ["Forgotten Island"]   = CFrame.new(-3055, 250, -10147),
-    -- Sea 3
-    ["Port Town"]          = CFrame.new(-291, 44, 5580),
-    ["Hydra Island"]       = CFrame.new(5228, 604, 345),
-    ["Great Tree"]         = CFrame.new(2192, 28, -6960),
-    ["Castle on Sea"]      = CFrame.new(-5087, 315, -3153),
-    ["Floating Turtle"]    = CFrame.new(-13232, 332, -7626),
-    ["Haunted Castle"]     = CFrame.new(-9515, 142, 5548),
-    ["Tiki Outpost"]       = CFrame.new(-12038, 332, -8412),
-    ["Mansion"]            = CFrame.new(-12568, 332, -7536),
-}
-
--- ═══════════════════════════════════════════════════════════
--- 👹 قاعدة بيانات الأعداء + NPCs الـ Quest
+-- 🎯 قاعدة بيانات المهام الكاملة
 -- ═══════════════════════════════════════════════════════════
 --[[
-    questNPC = اسم NPC الذي يعطيك المهمة
-    questId  = رقم المهمة المستخدم في Remote
+    هذه هي البيانات الصحيحة التي تستخدمها كل السكربتات الاحترافية:
     
-    ⚠️ مهم: اللاعب يجب أن يكون في نطاق الليفل المسموح
-    مثال: Gorilla Quest يتطلب Level 15+
-    السكربت القديم كان يرسل لـ Gorilla وهو Level 10 = لا تظهر المهمة
+    - questNpcName: اسم NPC الـ Quest بالضبط
+    - questArg: الأرقام التي تُرسل لـ StartQuest 
+    - npcCFrame: مكان الـ NPC (تلقيت للـ NPC مباشرة)
+    - mobName: اسم العدو
+    - mobCFrame: مكان تجمع الأعداء
+    - minLvl / maxLvl: نطاق الليفل
 ]]
 
-local ENEMIES = {
-    -- ══ SEA 1 ══
-    {min = 1,    max = 9,    name = "Bandit",               island = "Jungle",           sea = 1, questId = 1},
-    {min = 10,   max = 14,   name = "Monkey",               island = "Jungle",           sea = 1, questId = 2},
-    {min = 15,   max = 29,   name = "Gorilla",              island = "Jungle",           sea = 1, questId = 3},
-    {min = 30,   max = 39,   name = "Pirate",               island = "Pirate Village",   sea = 1, questId = 4},
-    {min = 40,   max = 59,   name = "Brute",                island = "Pirate Village",   sea = 1, questId = 5},
-    {min = 60,   max = 74,   name = "Desert Bandit",        island = "Desert",           sea = 1, questId = 6},
-    {min = 75,   max = 89,   name = "Desert Officer",       island = "Desert",           sea = 1, questId = 7},
-    {min = 90,   max = 104,  name = "Snow Bandit",          island = "Frozen Village",   sea = 1, questId = 8},
-    {min = 105,  max = 119,  name = "Snowman",              island = "Frozen Village",   sea = 1, questId = 9},
-    {min = 120,  max = 149,  name = "Chief Petty Officer",  island = "Marine Fortress",  sea = 1, questId = 10},
-    {min = 150,  max = 174,  name = "Sky Bandit",           island = "Sky Island",       sea = 1, questId = 11},
-    {min = 175,  max = 189,  name = "Dark Master",          island = "Sky Island",       sea = 1, questId = 12},
-    {min = 190,  max = 209,  name = "Prisoner",             island = "Prison",           sea = 1, questId = 13},
-    {min = 210,  max = 249,  name = "Dangerous Prisoner",   island = "Prison",           sea = 1, questId = 14},
-    {min = 250,  max = 274,  name = "Toga Warrior",         island = "Colosseum",        sea = 1, questId = 15},
-    {min = 275,  max = 299,  name = "Gladiator",            island = "Colosseum",        sea = 1, questId = 16},
-    {min = 300,  max = 324,  name = "Military Soldier",     island = "Magma Village",    sea = 1, questId = 17},
-    {min = 325,  max = 374,  name = "Military Spy",         island = "Magma Village",    sea = 1, questId = 18},
-    {min = 375,  max = 399,  name = "Fishman Warrior",      island = "Underwater City",  sea = 1, questId = 19},
-    {min = 400,  max = 449,  name = "Fishman Commando",     island = "Underwater City",  sea = 1, questId = 20},
-    {min = 450,  max = 474,  name = "God's Guard",          island = "Upper Skylands",   sea = 1, questId = 21},
-    {min = 475,  max = 524,  name = "Shanda",               island = "Upper Skylands",   sea = 1, questId = 22},
-    {min = 525,  max = 549,  name = "Royal Squad",          island = "Fountain City",    sea = 1, questId = 23},
-    {min = 550,  max = 624,  name = "Royal Soldier",        island = "Fountain City",    sea = 1, questId = 24},
-    {min = 625,  max = 699,  name = "Galley Pirate",        island = "Fountain City",    sea = 1, questId = 25},
+local QUESTS = {
+    -- ══════════════════════════════════════════
+    -- 🌊 SEA 1
+    -- ══════════════════════════════════════════
+    {
+        minLvl = 1, maxLvl = 9,
+        mobName = "Bandit",
+        questNpc = "Bandit Quest Giver",
+        questArg1 = "BanditQuest1", questArg2 = 1,
+        npcCFrame = CFrame.new(1060.9, 15.9, 1547.5),
+        mobCFrame = CFrame.new(1038, 21, 1583),
+        island = "Jungle", sea = 1,
+    },
+    {
+        minLvl = 10, maxLvl = 14,
+        mobName = "Monkey",
+        questNpc = "Jungle Quest Giver",
+        questArg1 = "JungleQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-1601.5, 36.8, 153.3),
+        mobCFrame = CFrame.new(-1445, 40, -34),
+        island = "Jungle", sea = 1,
+    },
+    {
+        minLvl = 15, maxLvl = 29,
+        mobName = "Gorilla",
+        questNpc = "Jungle Quest Giver",
+        questArg1 = "JungleQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-1601.5, 36.8, 153.3),
+        mobCFrame = CFrame.new(-1142, 40, -488),
+        island = "Jungle", sea = 1,
+    },
+    {
+        minLvl = 30, maxLvl = 39,
+        mobName = "Pirate",
+        questNpc = "Pirate Village Quest Giver",
+        questArg1 = "PirateQuest1", questArg2 = 1,
+        npcCFrame = CFrame.new(-1181.8, 4.7, 3803.1),
+        mobCFrame = CFrame.new(-1094, 15, 3833),
+        island = "Pirate Village", sea = 1,
+    },
+    {
+        minLvl = 40, maxLvl = 59,
+        mobName = "Brute",
+        questNpc = "Pirate Village Quest Giver",
+        questArg1 = "PirateQuest1", questArg2 = 2,
+        npcCFrame = CFrame.new(-1181.8, 4.7, 3803.1),
+        mobCFrame = CFrame.new(-1145, 20, 4015),
+        island = "Pirate Village", sea = 1,
+    },
+    {
+        minLvl = 60, maxLvl = 74,
+        mobName = "Desert Bandit",
+        questNpc = "Desert Quest Giver",
+        questArg1 = "DesertQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(1093.9, 6.5, 4287.4),
+        mobCFrame = CFrame.new(984, 6, 4390),
+        island = "Desert", sea = 1,
+    },
+    {
+        minLvl = 75, maxLvl = 89,
+        mobName = "Desert Officer",
+        questNpc = "Desert Quest Giver",
+        questArg1 = "DesertQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(1093.9, 6.5, 4287.4),
+        mobCFrame = CFrame.new(1521, 14, 4363),
+        island = "Desert", sea = 1,
+    },
+    {
+        minLvl = 90, maxLvl = 99,
+        mobName = "Snow Bandit",
+        questNpc = "Frozen Quest Giver",
+        questArg1 = "SnowQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(1386.8, 87.2, -1298.4),
+        mobCFrame = CFrame.new(1372, 105, -1355),
+        island = "Frozen Village", sea = 1,
+    },
+    {
+        minLvl = 100, maxLvl = 119,
+        mobName = "Snowman",
+        questNpc = "Frozen Quest Giver",
+        questArg1 = "SnowQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(1386.8, 87.2, -1298.4),
+        mobCFrame = CFrame.new(1237, 137, -1489),
+        island = "Frozen Village", sea = 1,
+    },
+    {
+        minLvl = 120, maxLvl = 149,
+        mobName = "Chief Petty Officer",
+        questNpc = "Marine Quest Giver",
+        questArg1 = "MarineQuest2", questArg2 = 1,
+        npcCFrame = CFrame.new(-5035.2, 28.7, 4325.5),
+        mobCFrame = CFrame.new(-4956, 21, 4238),
+        island = "Marine Fortress", sea = 1,
+    },
+    {
+        minLvl = 150, maxLvl = 174,
+        mobName = "Sky Bandit",
+        questNpc = "Sky Quest Giver",
+        questArg1 = "SkyQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-4842.1, 717.7, -2623.6),
+        mobCFrame = CFrame.new(-4996, 719, -2528),
+        island = "Sky Island", sea = 1,
+    },
+    {
+        minLvl = 175, maxLvl = 189,
+        mobName = "Dark Master",
+        questNpc = "Sky Quest Giver",
+        questArg1 = "SkyQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-4842.1, 717.7, -2623.6),
+        mobCFrame = CFrame.new(-5195, 719, -2419),
+        island = "Sky Island", sea = 1,
+    },
+    {
+        minLvl = 190, maxLvl = 209,
+        mobName = "Prisoner",
+        questNpc = "Prisoner Quest Giver",
+        questArg1 = "PrisonerQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(5308, 0.3, 474.7),
+        mobCFrame = CFrame.new(5228, 2, 800),
+        island = "Prison", sea = 1,
+    },
+    {
+        minLvl = 210, maxLvl = 249,
+        mobName = "Dangerous Prisoner",
+        questNpc = "Prisoner Quest Giver",
+        questArg1 = "PrisonerQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(5308, 0.3, 474.7),
+        mobCFrame = CFrame.new(5391, 15, 780),
+        island = "Prison", sea = 1,
+    },
+    {
+        minLvl = 250, maxLvl = 274,
+        mobName = "Toga Warrior",
+        questNpc = "Colosseum Quest Giver",
+        questArg1 = "ColosseumQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-1576.5, 7.4, -2984.8),
+        mobCFrame = CFrame.new(-1725, 45, -2903),
+        island = "Colosseum", sea = 1,
+    },
+    {
+        minLvl = 275, maxLvl = 299,
+        mobName = "Gladiator",
+        questNpc = "Colosseum Quest Giver",
+        questArg1 = "ColosseumQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-1576.5, 7.4, -2984.8),
+        mobCFrame = CFrame.new(-1613, 45, -3068),
+        island = "Colosseum", sea = 1,
+    },
+    {
+        minLvl = 300, maxLvl = 324,
+        mobName = "Military Soldier",
+        questNpc = "Magma Quest Giver",
+        questArg1 = "MagmaQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-5316.3, 12.4, 8517.2),
+        mobCFrame = CFrame.new(-5316, 24, 8517),
+        island = "Magma Village", sea = 1,
+    },
+    {
+        minLvl = 325, maxLvl = 374,
+        mobName = "Military Spy",
+        questNpc = "Magma Quest Giver",
+        questArg1 = "MagmaQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-5316.3, 12.4, 8517.2),
+        mobCFrame = CFrame.new(-5544, 78, 8788),
+        island = "Magma Village", sea = 1,
+    },
+    {
+        minLvl = 375, maxLvl = 399,
+        mobName = "Fishman Warrior",
+        questNpc = "Fishman Quest Giver",
+        questArg1 = "FishmanQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(61163.8, 11.5, 1819.7),
+        mobCFrame = CFrame.new(61123, 18, 1569),
+        island = "Underwater City", sea = 1,
+    },
+    {
+        minLvl = 400, maxLvl = 449,
+        mobName = "Fishman Commando",
+        questNpc = "Fishman Quest Giver",
+        questArg1 = "FishmanQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(61163.8, 11.5, 1819.7),
+        mobCFrame = CFrame.new(61385, 18, 1440),
+        island = "Underwater City", sea = 1,
+    },
+    {
+        minLvl = 450, maxLvl = 474,
+        mobName = "God's Guard",
+        questNpc = "God's Guard Quest Giver",
+        questArg1 = "SkyExp1Quest", questArg2 = 1,
+        npcCFrame = CFrame.new(-4721.4, 845.3, -1953.8),
+        mobCFrame = CFrame.new(-4869, 845, -1626),
+        island = "Upper Skylands", sea = 1,
+    },
+    {
+        minLvl = 475, maxLvl = 524,
+        mobName = "Shanda",
+        questNpc = "Upper Skyland Quest Giver",
+        questArg1 = "SkyExp1Quest", questArg2 = 2,
+        npcCFrame = CFrame.new(-7864.7, 5545.4, -381.7),
+        mobCFrame = CFrame.new(-7748, 5606, -320),
+        island = "Upper Skylands", sea = 1,
+    },
+    {
+        minLvl = 525, maxLvl = 549,
+        mobName = "Royal Squad",
+        questNpc = "Fountain Quest Giver",
+        questArg1 = "FountainQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(5254.5, 38.5, 4051.5),
+        mobCFrame = CFrame.new(5522, 40, 4103),
+        island = "Fountain City", sea = 1,
+    },
+    {
+        minLvl = 550, maxLvl = 624,
+        mobName = "Royal Soldier",
+        questNpc = "Fountain Quest Giver",
+        questArg1 = "FountainQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(5254.5, 38.5, 4051.5),
+        mobCFrame = CFrame.new(5642, 60, 4185),
+        island = "Fountain City", sea = 1,
+    },
+    {
+        minLvl = 625, maxLvl = 699,
+        mobName = "Galley Pirate",
+        questNpc = "Galley Quest Giver",
+        questArg1 = "Area2Quest", questArg2 = 1,
+        npcCFrame = CFrame.new(5254.5, 38.5, 4051.5),
+        mobCFrame = CFrame.new(5642, 60, 4185),
+        island = "Fountain City", sea = 1,
+    },
     
-    -- ══ SEA 2 ══
-    {min = 700,  max = 774,  name = "Raider",               island = "Kingdom of Rose",  sea = 2, questId = 1},
-    {min = 775,  max = 824,  name = "Mercenary",            island = "Kingdom of Rose",  sea = 2, questId = 2},
-    {min = 825,  max = 874,  name = "Swan Pirate",          island = "Green Zone",       sea = 2, questId = 3},
-    {min = 875,  max = 924,  name = "Factory Staff",        island = "Green Zone",       sea = 2, questId = 4},
-    {min = 925,  max = 949,  name = "Marine Lieutenant",    island = "Graveyard",        sea = 2, questId = 5},
-    {min = 950,  max = 974,  name = "Marine Captain",       island = "Graveyard",        sea = 2, questId = 6},
-    {min = 975,  max = 999,  name = "Zombie",               island = "Graveyard",        sea = 2, questId = 7},
-    {min = 1000, max = 1049, name = "Vampire",              island = "Graveyard",        sea = 2, questId = 8},
-    {min = 1050, max = 1099, name = "Snow Trooper",         island = "Snow Mountain",    sea = 2, questId = 9},
-    {min = 1100, max = 1124, name = "Winter Warrior",       island = "Snow Mountain",    sea = 2, questId = 10},
-    {min = 1125, max = 1174, name = "Lab Subordinate",      island = "Hot and Cold",     sea = 2, questId = 11},
-    {min = 1175, max = 1199, name = "Horned Warrior",       island = "Hot and Cold",     sea = 2, questId = 12},
-    {min = 1200, max = 1249, name = "Magma Ninja",          island = "Hot and Cold",     sea = 2, questId = 13},
-    {min = 1250, max = 1299, name = "Cursed Pirate",        island = "Cursed Ship",      sea = 2, questId = 14},
-    {min = 1300, max = 1349, name = "Ice Viking",           island = "Ice Castle",       sea = 2, questId = 15},
-    {min = 1350, max = 1424, name = "Marine Commodore",     island = "Forgotten Island", sea = 2, questId = 16},
-    {min = 1425, max = 1499, name = "Reborn Skeleton",      island = "Forgotten Island", sea = 2, questId = 17},
+    -- ══════════════════════════════════════════
+    -- 🌊 SEA 2
+    -- ══════════════════════════════════════════
+    {
+        minLvl = 700, maxLvl = 774,
+        mobName = "Raider",
+        questNpc = "Rose Quest Giver",
+        questArg1 = "Area1Quest", questArg2 = 1,
+        npcCFrame = CFrame.new(-427.7, 72.9, 1836.5),
+        mobCFrame = CFrame.new(-535, 72, 1875),
+        island = "Kingdom of Rose", sea = 2,
+    },
+    {
+        minLvl = 775, maxLvl = 824,
+        mobName = "Mercenary",
+        questNpc = "Rose Quest Giver",
+        questArg1 = "Area1Quest", questArg2 = 2,
+        npcCFrame = CFrame.new(-427.7, 72.9, 1836.5),
+        mobCFrame = CFrame.new(-923, 148, 2144),
+        island = "Kingdom of Rose", sea = 2,
+    },
+    {
+        minLvl = 825, maxLvl = 874,
+        mobName = "Swan Pirate",
+        questNpc = "Green Zone Quest Giver",
+        questArg1 = "Area2Quest", questArg2 = 1,
+        npcCFrame = CFrame.new(-2842.4, 71.8, 5320.6),
+        mobCFrame = CFrame.new(-3084, 88, 5117),
+        island = "Green Zone", sea = 2,
+    },
+    {
+        minLvl = 875, maxLvl = 924,
+        mobName = "Factory Staff",
+        questNpc = "Green Zone Quest Giver",
+        questArg1 = "Area2Quest", questArg2 = 2,
+        npcCFrame = CFrame.new(-2842.4, 71.8, 5320.6),
+        mobCFrame = CFrame.new(-2725, 71, 5203),
+        island = "Green Zone", sea = 2,
+    },
+    {
+        minLvl = 925, maxLvl = 949,
+        mobName = "Marine Lieutenant",
+        questNpc = "Marine Quest Giver",
+        questArg1 = "MarineQuest3", questArg2 = 1,
+        npcCFrame = CFrame.new(-5035.2, 28.7, 4325.5),
+        mobCFrame = CFrame.new(-5057, 45, 4249),
+        island = "Marine Fortress", sea = 2,
+    },
+    {
+        minLvl = 950, maxLvl = 974,
+        mobName = "Marine Captain",
+        questNpc = "Marine Quest Giver",
+        questArg1 = "MarineQuest3", questArg2 = 2,
+        npcCFrame = CFrame.new(-5035.2, 28.7, 4325.5),
+        mobCFrame = CFrame.new(-4915, 45, 4318),
+        island = "Marine Fortress", sea = 2,
+    },
+    {
+        minLvl = 975, maxLvl = 999,
+        mobName = "Zombie",
+        questNpc = "Zombie Quest Giver",
+        questArg1 = "ZombieQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-5495.8, 47.5, -793.4),
+        mobCFrame = CFrame.new(-5751, 12, -735),
+        island = "Graveyard", sea = 2,
+    },
+    {
+        minLvl = 1000, maxLvl = 1049,
+        mobName = "Vampire",
+        questNpc = "Zombie Quest Giver",
+        questArg1 = "ZombieQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-5495.8, 47.5, -793.4),
+        mobCFrame = CFrame.new(-6019, 8, -1379),
+        island = "Graveyard", sea = 2,
+    },
+    {
+        minLvl = 1050, maxLvl = 1099,
+        mobName = "Snow Trooper",
+        questNpc = "Snow Mountain Quest Giver",
+        questArg1 = "SnowMountainQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(605.5, 399.6, -5378.3),
+        mobCFrame = CFrame.new(1345, 460, -5498),
+        island = "Snow Mountain", sea = 2,
+    },
+    {
+        minLvl = 1100, maxLvl = 1124,
+        mobName = "Winter Warrior",
+        questNpc = "Snow Mountain Quest Giver",
+        questArg1 = "SnowMountainQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(605.5, 399.6, -5378.3),
+        mobCFrame = CFrame.new(1245, 470, -5423),
+        island = "Snow Mountain", sea = 2,
+    },
+    {
+        minLvl = 1125, maxLvl = 1174,
+        mobName = "Lab Subordinate",
+        questNpc = "Hot Quest Giver",
+        questArg1 = "HotAndColdQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-5751.9, 6.4, -5459.5),
+        mobCFrame = CFrame.new(-6094, 14, -5573),
+        island = "Hot and Cold", sea = 2,
+    },
+    {
+        minLvl = 1175, maxLvl = 1199,
+        mobName = "Horned Warrior",
+        questNpc = "Hot Quest Giver",
+        questArg1 = "HotAndColdQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-5751.9, 6.4, -5459.5),
+        mobCFrame = CFrame.new(-6217, 82, -5911),
+        island = "Hot and Cold", sea = 2,
+    },
+    {
+        minLvl = 1200, maxLvl = 1249,
+        mobName = "Magma Ninja",
+        questNpc = "Hot Quest Giver",
+        questArg1 = "HotAndColdQuest", questArg2 = 3,
+        npcCFrame = CFrame.new(-5751.9, 6.4, -5459.5),
+        mobCFrame = CFrame.new(-5934, 47, -5952),
+        island = "Hot and Cold", sea = 2,
+    },
+    {
+        minLvl = 1250, maxLvl = 1274,
+        mobName = "Cursed Pirate",
+        questNpc = "Cursed Ship Quest Giver",
+        questArg1 = "CursedShipQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(923.8, 125.4, 32873.2),
+        mobCFrame = CFrame.new(1246, 126, 32988),
+        island = "Cursed Ship", sea = 2,
+    },
+    {
+        minLvl = 1275, maxLvl = 1299,
+        mobName = "Ice Viking",
+        questNpc = "Ice Castle Quest Giver",
+        questArg1 = "IceCastleQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(6187.9, 294.2, -6743.6),
+        mobCFrame = CFrame.new(6403, 294, -6564),
+        island = "Ice Castle", sea = 2,
+    },
+    {
+        minLvl = 1300, maxLvl = 1324,
+        mobName = "Snow Lurker",
+        questNpc = "Ice Castle Quest Giver",
+        questArg1 = "IceCastleQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(6187.9, 294.2, -6743.6),
+        mobCFrame = CFrame.new(6403, 294, -6564),
+        island = "Ice Castle", sea = 2,
+    },
+    {
+        minLvl = 1325, maxLvl = 1349,
+        mobName = "Marine Commodore",
+        questNpc = "Forgotten Quest Giver",
+        questArg1 = "FountainQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-3054.9, 236.7, -10147.6),
+        mobCFrame = CFrame.new(-3223, 250, -10112),
+        island = "Forgotten Island", sea = 2,
+    },
+    {
+        minLvl = 1350, maxLvl = 1424,
+        mobName = "Marine Commodore",
+        questNpc = "Forgotten Quest Giver",
+        questArg1 = "FountainQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-3054.9, 236.7, -10147.6),
+        mobCFrame = CFrame.new(-3223, 250, -10112),
+        island = "Forgotten Island", sea = 2,
+    },
+    {
+        minLvl = 1425, maxLvl = 1499,
+        mobName = "Marine Rear Admiral",
+        questNpc = "Forgotten Quest Giver",
+        questArg1 = "FountainQuest", questArg2 = 3,
+        npcCFrame = CFrame.new(-3054.9, 236.7, -10147.6),
+        mobCFrame = CFrame.new(-3078, 236, -9739),
+        island = "Forgotten Island", sea = 2,
+    },
     
-    -- ══ SEA 3 ══
-    {min = 1500, max = 1524, name = "Pirate Millionaire",   island = "Port Town",        sea = 3, questId = 1},
-    {min = 1525, max = 1574, name = "Pistol Billionaire",   island = "Port Town",        sea = 3, questId = 2},
-    {min = 1575, max = 1624, name = "Dragon Crew Warrior",  island = "Hydra Island",     sea = 3, questId = 3},
-    {min = 1625, max = 1649, name = "Dragon Crew Archer",   island = "Hydra Island",     sea = 3, questId = 4},
-    {min = 1650, max = 1699, name = "Female Islander",      island = "Great Tree",       sea = 3, questId = 5},
-    {min = 1700, max = 1749, name = "Giant Islander",       island = "Great Tree",       sea = 3, questId = 6},
-    {min = 1750, max = 1799, name = "Marine Commodore",     island = "Castle on Sea",    sea = 3, questId = 7},
-    {min = 1800, max = 1849, name = "Marine Rear Admiral",  island = "Castle on Sea",    sea = 3, questId = 8},
-    {min = 1850, max = 1899, name = "Fishman Raider",       island = "Floating Turtle",  sea = 3, questId = 9},
-    {min = 1900, max = 1949, name = "Fishman Captain",      island = "Floating Turtle",  sea = 3, questId = 10},
-    {min = 1950, max = 1999, name = "Forest Pirate",        island = "Floating Turtle",  sea = 3, questId = 11},
-    {min = 2000, max = 2074, name = "Mythological Pirate",  island = "Floating Turtle",  sea = 3, questId = 12},
-    {min = 2075, max = 2099, name = "Jungle Pirate",        island = "Floating Turtle",  sea = 3, questId = 13},
-    {min = 2100, max = 2149, name = "Musketeer Pirate",     island = "Floating Turtle",  sea = 3, questId = 14},
-    {min = 2150, max = 2199, name = "Reborn Skeleton",      island = "Haunted Castle",   sea = 3, questId = 15},
-    {min = 2200, max = 2249, name = "Living Zombie",        island = "Haunted Castle",   sea = 3, questId = 16},
-    {min = 2250, max = 2299, name = "Demonic Soul",         island = "Haunted Castle",   sea = 3, questId = 17},
-    {min = 2300, max = 2349, name = "Posessed Mummy",       island = "Haunted Castle",   sea = 3, questId = 18},
-    {min = 2350, max = 2399, name = "Peanut Scout",         island = "Tiki Outpost",     sea = 3, questId = 19},
-    {min = 2400, max = 2449, name = "Peanut President",     island = "Tiki Outpost",     sea = 3, questId = 20},
-    {min = 2450, max = 2499, name = "Ice Cream Chef",       island = "Mansion",          sea = 3, questId = 21},
-    {min = 2500, max = 2550, name = "Cookie Crafter",       island = "Mansion",          sea = 3, questId = 22},
+    -- ══════════════════════════════════════════
+    -- 🌊 SEA 3
+    -- ══════════════════════════════════════════
+    {
+        minLvl = 1500, maxLvl = 1524,
+        mobName = "Pirate Millionaire",
+        questNpc = "Port Town Quest Giver",
+        questArg1 = "PiratePortQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-290.8, 43.5, 5581.6),
+        mobCFrame = CFrame.new(-486, 72, 5747),
+        island = "Port Town", sea = 3,
+    },
+    {
+        minLvl = 1525, maxLvl = 1574,
+        mobName = "Pistol Billionaire",
+        questNpc = "Port Town Quest Giver",
+        questArg1 = "PiratePortQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-290.8, 43.5, 5581.6),
+        mobCFrame = CFrame.new(-291, 43, 5581),
+        island = "Port Town", sea = 3,
+    },
+    {
+        minLvl = 1575, maxLvl = 1624,
+        mobName = "Dragon Crew Warrior",
+        questNpc = "Hydra Quest Giver",
+        questArg1 = "AmazonQuest2", questArg2 = 1,
+        npcCFrame = CFrame.new(5233.4, 603.7, 345.3),
+        mobCFrame = CFrame.new(5433, 603, 400),
+        island = "Hydra Island", sea = 3,
+    },
+    {
+        minLvl = 1625, maxLvl = 1649,
+        mobName = "Dragon Crew Archer",
+        questNpc = "Hydra Quest Giver",
+        questArg1 = "AmazonQuest2", questArg2 = 2,
+        npcCFrame = CFrame.new(5233.4, 603.7, 345.3),
+        mobCFrame = CFrame.new(5433, 603, 400),
+        island = "Hydra Island", sea = 3,
+    },
+    {
+        minLvl = 1650, maxLvl = 1699,
+        mobName = "Female Islander",
+        questNpc = "Great Tree Quest Giver",
+        questArg1 = "MarineTreeIsland", questArg2 = 1,
+        npcCFrame = CFrame.new(2192.8, 28.6, -6960.9),
+        mobCFrame = CFrame.new(2350, 90, -6934),
+        island = "Great Tree", sea = 3,
+    },
+    {
+        minLvl = 1700, maxLvl = 1724,
+        mobName = "Giant Islander",
+        questNpc = "Great Tree Quest Giver",
+        questArg1 = "MarineTreeIsland", questArg2 = 2,
+        npcCFrame = CFrame.new(2192.8, 28.6, -6960.9),
+        mobCFrame = CFrame.new(2350, 90, -6934),
+        island = "Great Tree", sea = 3,
+    },
+    {
+        minLvl = 1725, maxLvl = 1774,
+        mobName = "Marine Commodore",
+        questNpc = "Castle Quest Giver",
+        questArg1 = "IceCastleQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-5083.8, 314.8, -3145.6),
+        mobCFrame = CFrame.new(-5083, 314, -3145),
+        island = "Castle on Sea", sea = 3,
+    },
+    {
+        minLvl = 1775, maxLvl = 1799,
+        mobName = "Marine Rear Admiral",
+        questNpc = "Castle Quest Giver",
+        questArg1 = "IceCastleQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-5083.8, 314.8, -3145.6),
+        mobCFrame = CFrame.new(-5083, 314, -3145),
+        island = "Castle on Sea", sea = 3,
+    },
+    {
+        minLvl = 1800, maxLvl = 1824,
+        mobName = "Fishman Raider",
+        questNpc = "Fishman Quest Giver",
+        questArg1 = "FishmanQuest2", questArg2 = 1,
+        npcCFrame = CFrame.new(-10614.9, 331.4, -8090.7),
+        mobCFrame = CFrame.new(-11141, 331, -8354),
+        island = "Floating Turtle", sea = 3,
+    },
+    {
+        minLvl = 1825, maxLvl = 1874,
+        mobName = "Fishman Captain",
+        questNpc = "Fishman Quest Giver",
+        questArg1 = "FishmanQuest2", questArg2 = 2,
+        npcCFrame = CFrame.new(-10614.9, 331.4, -8090.7),
+        mobCFrame = CFrame.new(-11141, 331, -8354),
+        island = "Floating Turtle", sea = 3,
+    },
+    {
+        minLvl = 1875, maxLvl = 1924,
+        mobName = "Forest Pirate",
+        questNpc = "Forest Quest Giver",
+        questArg1 = "ForgottenQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-13232.6, 331.9, -7626.2),
+        mobCFrame = CFrame.new(-13232, 331, -7626),
+        island = "Floating Turtle", sea = 3,
+    },
+    {
+        minLvl = 1925, maxLvl = 1974,
+        mobName = "Mythological Pirate",
+        questNpc = "Forest Quest Giver",
+        questArg1 = "ForgottenQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-13232.6, 331.9, -7626.2),
+        mobCFrame = CFrame.new(-13232, 331, -7626),
+        island = "Floating Turtle", sea = 3,
+    },
+    {
+        minLvl = 1975, maxLvl = 2074,
+        mobName = "Jungle Pirate",
+        questNpc = "Pirate Quest Giver",
+        questArg1 = "PiratePortQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-11888.7, 331.7, -8794.8),
+        mobCFrame = CFrame.new(-11888, 331, -8794),
+        island = "Floating Turtle", sea = 3,
+    },
+    {
+        minLvl = 2075, maxLvl = 2149,
+        mobName = "Musketeer Pirate",
+        questNpc = "Pirate Quest Giver",
+        questArg1 = "PiratePortQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-11888.7, 331.7, -8794.8),
+        mobCFrame = CFrame.new(-11888, 331, -8794),
+        island = "Floating Turtle", sea = 3,
+    },
+    {
+        minLvl = 2150, maxLvl = 2199,
+        mobName = "Reborn Skeleton",
+        questNpc = "Haunted Quest Giver",
+        questArg1 = "HauntedQuest1", questArg2 = 1,
+        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
+        mobCFrame = CFrame.new(-9515, 142, 5548),
+        island = "Haunted Castle", sea = 3,
+    },
+    {
+        minLvl = 2200, maxLvl = 2249,
+        mobName = "Living Zombie",
+        questNpc = "Haunted Quest Giver",
+        questArg1 = "HauntedQuest1", questArg2 = 2,
+        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
+        mobCFrame = CFrame.new(-9515, 142, 5548),
+        island = "Haunted Castle", sea = 3,
+    },
+    {
+        minLvl = 2250, maxLvl = 2299,
+        mobName = "Demonic Soul",
+        questNpc = "Haunted Quest Giver",
+        questArg1 = "HauntedQuest2", questArg2 = 1,
+        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
+        mobCFrame = CFrame.new(-9515, 142, 5548),
+        island = "Haunted Castle", sea = 3,
+    },
+    {
+        minLvl = 2300, maxLvl = 2374,
+        mobName = "Posessed Mummy",
+        questNpc = "Haunted Quest Giver",
+        questArg1 = "HauntedQuest2", questArg2 = 2,
+        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
+        mobCFrame = CFrame.new(-9515, 142, 5548),
+        island = "Haunted Castle", sea = 3,
+    },
+    {
+        minLvl = 2375, maxLvl = 2399,
+        mobName = "Peanut Scout",
+        questNpc = "Peanut Quest Giver",
+        questArg1 = "IceSideQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-2038.9, 47.1, -10355.5),
+        mobCFrame = CFrame.new(-2038, 47, -10355),
+        island = "Tiki Outpost", sea = 3,
+    },
+    {
+        minLvl = 2400, maxLvl = 2424,
+        mobName = "Peanut President",
+        questNpc = "Peanut Quest Giver",
+        questArg1 = "IceSideQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-2038.9, 47.1, -10355.5),
+        mobCFrame = CFrame.new(-2038, 47, -10355),
+        island = "Tiki Outpost", sea = 3,
+    },
+    {
+        minLvl = 2425, maxLvl = 2449,
+        mobName = "Ice Cream Chef",
+        questNpc = "Ice Cream Quest Giver",
+        questArg1 = "FireSideQuest", questArg2 = 1,
+        npcCFrame = CFrame.new(-819.5, 66.9, -10967.7),
+        mobCFrame = CFrame.new(-819, 66, -10967),
+        island = "Ice Cream Island", sea = 3,
+    },
+    {
+        minLvl = 2450, maxLvl = 2474,
+        mobName = "Cookie Crafter",
+        questNpc = "Ice Cream Quest Giver",
+        questArg1 = "FireSideQuest", questArg2 = 2,
+        npcCFrame = CFrame.new(-819.5, 66.9, -10967.7),
+        mobCFrame = CFrame.new(-819, 66, -10967),
+        island = "Ice Cream Island", sea = 3,
+    },
+    {
+        minLvl = 2475, maxLvl = 2549,
+        mobName = "Cake Guard",
+        questNpc = "Ice Cream Quest Giver",
+        questArg1 = "FireSideQuest", questArg2 = 3,
+        npcCFrame = CFrame.new(-819.5, 66.9, -10967.7),
+        mobCFrame = CFrame.new(-819, 66, -10967),
+        island = "Ice Cream Island", sea = 3,
+    },
 }
 
 -- ═══════════════════════════════════════════════════════════
@@ -216,181 +716,120 @@ local function getHRP()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 
-local function getHumanoid()
+local function getHum()
     local c = getChar()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
 local function isAlive()
-    local hum = getHumanoid()
-    local hrp = getHRP()
-    return hum and hrp and hum.Health > 0 and hrp.Parent
+    local h = getHum()
+    local r = getHRP()
+    return h and r and h.Health > 0 and r.Parent
 end
 
 local function getLevel()
-    local lvl = 1
-    pcall(function()
-        lvl = LocalPlayer.Data.Level.Value
-    end)
-    return lvl
+    local l = 1
+    pcall(function() l = LocalPlayer.Data.Level.Value end)
+    return l
 end
 
 local function getRemote()
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    if not remotes then return nil end
-    return remotes:FindFirstChild("CommF_")
+    local r = ReplicatedStorage:FindFirstChild("Remotes")
+    return r and r:FindFirstChild("CommF_")
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 اختيار العدو المناسب
+-- 🎯 اختيار Quest المناسب
 -- ═══════════════════════════════════════════════════════════
-local function getTargetInfo()
-    local level = getLevel()
-    for _, e in ipairs(ENEMIES) do
-        if level >= e.min and level <= e.max then
-            return e
+local function getCurrentQuest()
+    local lvl = getLevel()
+    for _, q in ipairs(QUESTS) do
+        if lvl >= q.minLvl and lvl <= q.maxLvl then
+            return q
         end
     end
-    return ENEMIES[#ENEMIES]
+    return QUESTS[#QUESTS]
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 📜 نظام Quest الكامل
+-- 📜 تحقق من وجود Quest نشط (الطريقة الصحيحة)
 -- ═══════════════════════════════════════════════════════════
-local questActive = false
-local questTarget = nil
-local questKillsNeeded = 0
-local questKillsDone = 0
-
 local function hasActiveQuest()
-    local has = false
+    local active = false
     pcall(function()
-        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-        if not playerGui then return end
+        -- تحقق من QuestGui في PlayerGui
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if not pg then return end
         
-        local main = playerGui:FindFirstChild("Main")
-        if not main then return end
-        
-        for _, obj in pairs(main:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Visible then
-                local text = obj.Text or ""
-                if text:find("Defeat") or text:find("defeat") 
-                   or text:find("Kill") or text:find("kill")
-                   or text:find("Quest") then
-                    has = true
+        -- في Blox Fruits، Quest يظهر في Main.Quest
+        local main = pg:FindFirstChild("Main")
+        if main then
+            local quest = main:FindFirstChild("Quest")
+            if quest and quest.Visible then
+                active = true
+                return
+            end
+            
+            -- أو من خلال البحث عن Frame اسمه Quest
+            for _, obj in pairs(main:GetDescendants()) do
+                if (obj:IsA("Frame") or obj:IsA("ImageLabel")) and obj.Name:lower():find("quest") then
+                    if obj.Visible then
+                        -- تحقق أن فيه نص "Defeat" أو رقم
+                        for _, sub in pairs(obj:GetDescendants()) do
+                            if sub:IsA("TextLabel") then
+                                local t = sub.Text or ""
+                                if t:find("Defeat") or t:find("/") then
+                                    active = true
+                                    return
+                                end
+                            end
+                        end
+                    end
                 end
             end
         end
     end)
-    return has
+    return active
 end
 
-local function getQuest(targetInfo)
+-- ═══════════════════════════════════════════════════════════
+-- 🚢 انتقال للبحر
+-- ═══════════════════════════════════════════════════════════
+local function travelToSea(targetSea)
+    if getCurrentSea() == targetSea then return true end
+    
+    log("🚢 انتقال إلى Sea " .. targetSea)
+    notify("🚢 Traveling", "Sea " .. getCurrentSea() .. " → " .. targetSea, 5)
+    
     local commF = getRemote()
-    if not commF then
-        log("❌ لا يوجد Remote للـ Quest!")
-        return false
-    end
+    if not commF then return false end
     
-    log("📜 محاولة أخذ Quest لـ " .. targetInfo.name .. " (Quest ID: " .. targetInfo.questId .. ")")
+    local cmds = {[1]="TravelMain", [2]="TravelDressrosa", [3]="TravelZou"}
     
+    pcall(function()
+        commF:InvokeServer(cmds[targetSea])
+    end)
+    
+    task.wait(8)
+    return true
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- 🗣️ أخذ Quest (الطريقة الصحيحة!)
+-- ═══════════════════════════════════════════════════════════
+local function acceptQuest(quest)
+    local commF = getRemote()
+    if not commF then return false end
+    
+    -- الطريقة الصحيحة المستخدمة في كل السكربتات
     local success = false
-    
-    -- الطريقة 1: StartQuest مع questId
     pcall(function()
-        local result = commF:InvokeServer("StartQuest", targetInfo.questId, 1)
-        if result then
-            success = true
-            log("✅ Quest accepted via StartQuest(" .. targetInfo.questId .. ")")
-        end
-    end)
-    
-    if success then return true end
-    
-    -- الطريقة 2: StartQuest مع اسم العدو
-    pcall(function()
-        local result = commF:InvokeServer("StartQuest", targetInfo.name, 1)
-        if result then
-            success = true
-            log("✅ Quest accepted via StartQuest('" .. targetInfo.name .. "')")
-        end
-    end)
-    
-    if success then return true end
-    
-    -- الطريقة 3: AcceptQuest
-    pcall(function()
-        commF:InvokeServer("AcceptQuest", targetInfo.questId)
+        commF:InvokeServer("StartQuest", quest.questArg1, quest.questArg2)
         success = true
     end)
     
-    if success then return true end
-    
-    -- الطريقة 4: Quest مع اسم NPC
-    pcall(function()
-        commF:InvokeServer("Quest", targetInfo.questId)
-        success = true
-    end)
-    
-    -- الطريقة 5: البحث عن NPC القريب والتفاعل معه
-    if not success then
-        pcall(function()
-            for _, npc in pairs(Workspace:GetDescendants()) do
-                if npc:IsA("Model") then
-                    local nameMatch = false
-                    
-                    -- ابحث عن NPC باسم يحتوي على اسم العدو أو "Quest"
-                    local npcName = npc.Name:lower()
-                    local targetNameLower = targetInfo.name:lower()
-                    
-                    if npcName:find("quest") then
-                        -- تحقق من الأطفال للعثور على الاسم
-                        for _, child in pairs(npc:GetDescendants()) do
-                            if child:IsA("TextLabel") or child:IsA("BillboardGui") then
-                                pcall(function()
-                                    if child.Text and child.Text:lower():find(targetNameLower:sub(1, 6)) then
-                                        nameMatch = true
-                                    end
-                                end)
-                            end
-                        end
-                    end
-                    
-                    -- تحقق مباشرة من الاسم
-                    if npcName:find(targetNameLower:sub(1, 6)) and npcName:find("quest") then
-                        nameMatch = true
-                    end
-                    
-                    if nameMatch then
-                        local npcPart = npc:FindFirstChild("HumanoidRootPart") 
-                                       or npc:FindFirstChild("Head")
-                                       or npc:FindFirstChildWhichIsA("BasePart")
-                        if npcPart then
-                            local hrp = getHRP()
-                            if hrp then
-                                -- اقترب من NPC
-                                hrp.CFrame = npcPart.CFrame * CFrame.new(0, 0, 3)
-                                task.wait(0.5)
-                                
-                                -- تفاعل
-                                pcall(function()
-                                    local cd = npc:FindFirstChildOfClass("ClickDetector")
-                                    if cd then fireclickdetector(cd) end
-                                end)
-                                pcall(function()
-                                    local pp = npc:FindFirstChildOfClass("ProximityPrompt")
-                                    if pp then fireproximityprompt(pp) end
-                                end)
-                                
-                                task.wait(1)
-                                success = true
-                                log("✅ تفاعلت مع NPC: " .. npc.Name)
-                            end
-                        end
-                    end
-                end
-            end
-        end)
+    if success then
+        log("📜 Quest مأخوذ: " .. quest.questArg1 .. " - " .. quest.questArg2 .. " (" .. quest.mobName .. ")")
     end
     
     return success
@@ -400,208 +839,159 @@ end
 -- 🗡️ تجهيز السلاح
 -- ═══════════════════════════════════════════════════════════
 local function getEquippedTool()
-    local char = getChar()
-    if not char then return nil end
-    for _, item in pairs(char:GetChildren()) do
-        if item:IsA("Tool") then return item end
+    local c = getChar()
+    if not c then return nil end
+    for _, i in pairs(c:GetChildren()) do
+        if i:IsA("Tool") then return i end
     end
     return nil
 end
 
 local function equipWeapon()
-    local tool = getEquippedTool()
-    if tool then return tool end
+    local t = getEquippedTool()
+    if t then return t end
     
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if not backpack then return nil end
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if not bp then return nil end
     
-    -- أولوية الأسلحة
-    local priority = {
-        "Superhuman", "Death Step", "Electric Claw", "Dragon Talon",
-        "Sharkman Karate", "Dragon Claw", "Fishman Karate",
-        "Electro", "Black Leg", "Combat",
-        "Cursed Dual Katana", "Yama", "Tushita",
-        "True Triple Katana", "Pole v2", "Saber",
-        "Katana", "Cutlass",
-    }
-    
-    for _, weaponName in ipairs(priority) do
-        for _, item in pairs(backpack:GetChildren()) do
-            if item:IsA("Tool") and item.Name == weaponName then
-                local hum = getHumanoid()
-                if hum then
-                    hum:EquipTool(item)
-                    task.wait(0.3)
-                    return item
-                end
-            end
-        end
-    end
-    
-    -- أي سلاح
-    for _, item in pairs(backpack:GetChildren()) do
-        if item:IsA("Tool") then
-            local hum = getHumanoid()
-            if hum then
-                hum:EquipTool(item)
+    for _, i in pairs(bp:GetChildren()) do
+        if i:IsA("Tool") then
+            local h = getHum()
+            if h then
+                h:EquipTool(i)
                 task.wait(0.3)
-                return item
+                return i
             end
         end
     end
-    
     return nil
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🔍 البحث عن الأعداء
+-- 🔍 البحث عن العدو المستهدف
 -- ═══════════════════════════════════════════════════════════
-local function findEnemy(targetName)
+local function findMob(mobName)
     local hrp = getHRP()
-    if not hrp then return nil, math.huge end
-    
-    local nearest = nil
-    local nearestDist = math.huge
+    if not hrp then return nil end
     
     local folder = Workspace:FindFirstChild("Enemies")
-    if not folder then return nil, math.huge end
+    if not folder then return nil end
     
-    for _, enemy in pairs(folder:GetChildren()) do
-        if enemy.Name == targetName then
-            local eHum = enemy:FindFirstChildOfClass("Humanoid")
-            local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-            if eHum and eHRP and eHum.Health > 0 and eHRP.Parent then
-                local dist = (hrp.Position - eHRP.Position).Magnitude
-                if dist < nearestDist then
-                    nearestDist = dist
-                    nearest = enemy
+    local nearest, minDist = nil, math.huge
+    for _, m in pairs(folder:GetChildren()) do
+        if m.Name == mobName then
+            local mh = m:FindFirstChildOfClass("Humanoid")
+            local mr = m:FindFirstChild("HumanoidRootPart")
+            if mh and mr and mh.Health > 0 and mr.Parent then
+                local d = (hrp.Position - mr.Position).Magnitude
+                if d < minDist then
+                    minDist = d
+                    nearest = m
                 end
             end
         end
     end
-    
-    return nearest, nearestDist
+    return nearest, minDist
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🚢 انتقال بين البحار
+-- 🧲 جذب الأعداء (Bring Mobs) - أفضل من الطيران!
 -- ═══════════════════════════════════════════════════════════
-local function travelToSea(targetSea)
-    if getCurrentSea() == targetSea then return true end
-    
-    log("🚢 انتقال إلى Sea " .. targetSea)
-    notify("🚢 Traveling", "Sea " .. getCurrentSea() .. " → Sea " .. targetSea, 5)
-    
-    local commF = getRemote()
-    if not commF then return false end
-    
-    local commands = {
-        [1] = "TravelMain",
-        [2] = "TravelDressrosa",
-        [3] = "TravelZou",
-    }
+local function bringMobs(mobName, playerPos)
+    if not CFG.BRING_MOBS then return end
     
     pcall(function()
-        commF:InvokeServer(commands[targetSea])
+        local folder = Workspace:FindFirstChild("Enemies")
+        if not folder then return end
+        
+        for _, m in pairs(folder:GetChildren()) do
+            if m.Name == mobName then
+                local mh = m:FindFirstChildOfClass("Humanoid")
+                local mr = m:FindFirstChild("HumanoidRootPart")
+                if mh and mr and mh.Health > 0 then
+                    local d = (playerPos - mr.Position).Magnitude
+                    -- اجذب فقط الأعداء ضمن 500 دراع
+                    if d < 500 then
+                        mr.CFrame = CFrame.new(playerPos + Vector3.new(3, 0, 3))
+                    end
+                end
+            end
+        end
     end)
-    
-    task.wait(CONFIG.SEA_TRAVEL_WAIT)
-    return true
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 💥 نظام الهجوم (محسّن - أخف على iPhone)
+-- 💥 نظام الهجوم M1 (الطريقة الصحيحة)
 -- ═══════════════════════════════════════════════════════════
-local attackActive = false
+local attackOn = false
 local currentTarget = nil
 
 local function startAttack()
-    if attackActive then return end
-    attackActive = true
+    if attackOn then return end
+    attackOn = true
     
-    -- Thread 1: Mouse Click
+    -- Thread 1: Click Simulation
     spawn(function()
-        while attackActive and getgenv().BFF_FARM_ACTIVE do
+        while attackOn and getgenv().BFF_FARM_ACTIVE do
             pcall(function()
                 local vs = Camera.ViewportSize
                 VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, true, game, 0)
                 task.wait(0.03)
                 VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, false, game, 0)
             end)
-            task.wait(CONFIG.ATTACK_SPEED)
+            task.wait(CFG.ATTACK_SPEED)
         end
     end)
     
     -- Thread 2: Tool Activate
     spawn(function()
-        while attackActive and getgenv().BFF_FARM_ACTIVE do
+        while attackOn and getgenv().BFF_FARM_ACTIVE do
             pcall(function()
-                local tool = getEquippedTool()
-                if tool then tool:Activate() end
+                local t = getEquippedTool()
+                if t then t:Activate() end
             end)
-            task.wait(CONFIG.ATTACK_SPEED)
+            task.wait(CFG.ATTACK_SPEED)
         end
     end)
 end
 
 local function stopAttack()
-    attackActive = false
+    attackOn = false
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎬 تسريع الأنيميشن
+-- 🎬 Animation Speed
 -- ═══════════════════════════════════════════════════════════
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
         pcall(function()
-            local hum = getHumanoid()
-            if hum then
-                for _, track in pairs(hum:GetPlayingAnimationTracks()) do
-                    local n = track.Name:lower()
+            local h = getHum()
+            if h then
+                for _, tr in pairs(h:GetPlayingAnimationTracks()) do
+                    local n = tr.Name:lower()
                     if n:find("attack") or n:find("combat") or n:find("punch") 
-                       or n:find("slash") or n:find("hit") or n:find("swing") then
-                        track:AdjustSpeed(CONFIG.ANIMATION_SPEED)
+                       or n:find("slash") or n:find("hit") then
+                        tr:AdjustSpeed(CFG.ANIMATION_SPEED)
                     end
                 end
             end
         end)
-        task.wait(0.15)
+        task.wait(0.2)
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 💥 Cooldown Bypass (محسّن)
--- ═══════════════════════════════════════════════════════════
-spawn(function()
-    while getgenv().BFF_FARM_ACTIVE do
-        pcall(function()
-            if typeof(getgc) == "function" then
-                for _, v in pairs(getgc(true)) do
-                    if type(v) == "table" then
-                        pcall(function()
-                            if rawget(v, "AttackCooldown") then v.AttackCooldown = 0 end
-                            if rawget(v, "timeToNextAttack") then v.timeToNextAttack = 0 end
-                        end)
-                    end
-                end
-            end
-        end)
-        task.wait(CONFIG.GC_BYPASS_INTERVAL)
-    end
-end)
-
--- ═══════════════════════════════════════════════════════════
--- 📷 توجيه الكاميرا
+-- 📷 كاميرا
 -- ═══════════════════════════════════════════════════════════
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
         pcall(function()
             if currentTarget and currentTarget.Parent then
-                local eHRP = currentTarget:FindFirstChild("HumanoidRootPart")
-                if eHRP and eHRP.Parent then
+                local er = currentTarget:FindFirstChild("HumanoidRootPart")
+                if er and er.Parent then
                     Camera.CFrame = CFrame.new(
-                        eHRP.Position + Vector3.new(0, 12, 8),
-                        eHRP.Position
+                        er.Position + Vector3.new(0, 10, 5),
+                        er.Position
                     )
                 end
             end
@@ -611,87 +1001,48 @@ spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🚶 حركة داخل الجزيرة
--- ═══════════════════════════════════════════════════════════
-local function wanderInIsland(islandCF, targetName)
-    local hrp = getHRP()
-    if not hrp then return false end
-    
-    log("🚶 بحث داخل الجزيرة عن " .. targetName)
-    
-    local r = CONFIG.SPAWN_MOVE_RADIUS
-    local dirs = {
-        Vector3.new(r, 0, 0),     Vector3.new(-r, 0, 0),
-        Vector3.new(0, 0, r),     Vector3.new(0, 0, -r),
-        Vector3.new(r*0.7, 0, r*0.7),   Vector3.new(-r*0.7, 0, r*0.7),
-        Vector3.new(r*0.7, 0, -r*0.7),  Vector3.new(-r*0.7, 0, -r*0.7),
-    }
-    
-    for _, dir in ipairs(dirs) do
-        if not getgenv().BFF_FARM_ACTIVE then return false end
-        
-        pcall(function()
-            hrp.CFrame = CFrame.new(islandCF.Position + dir + Vector3.new(0, CONFIG.TELEPORT_HEIGHT, 0))
-        end)
-        
-        task.wait(CONFIG.SEARCH_WAIT)
-        
-        local enemy = findEnemy(targetName)
-        if enemy then
-            log("✅ وجدت " .. targetName .. " بعد التحرك!")
-            return true
-        end
-    end
-    
-    return false
-end
-
--- ═══════════════════════════════════════════════════════════
 -- 🔄 Anti-Death
 -- ═══════════════════════════════════════════════════════════
-LocalPlayer.CharacterAdded:Connect(function(newChar)
+LocalPlayer.CharacterAdded:Connect(function(c)
     stopAttack()
     currentTarget = nil
     log("🔄 Respawning...")
-    newChar:WaitForChild("Humanoid", 30)
-    newChar:WaitForChild("HumanoidRootPart", 30)
+    c:WaitForChild("Humanoid", 30)
+    c:WaitForChild("HumanoidRootPart", 30)
     task.wait(3)
-    log("✅ Respawned!")
 end)
 
 -- ═══════════════════════════════════════════════════════════
 -- 📊 إحصائيات
 -- ═══════════════════════════════════════════════════════════
-local stats = {
-    kills = 0,
-    startLevel = getLevel(),
-    startTime = tick(),
-    quests = 0,
-}
+local stats = {kills=0, quests=0, startLvl=getLevel(), startTime=tick()}
 
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
-        task.wait(300)
-        local elapsed = math.floor((tick() - stats.startTime) / 60)
-        local gained = getLevel() - stats.startLevel
-        log(string.format("📊 Kills: %d | +%d Levels | %dm | Quests: %d", 
-            stats.kills, gained, elapsed, stats.quests))
+        task.wait(180)
+        local mins = math.floor((tick() - stats.startTime)/60)
+        local gained = getLevel() - stats.startLvl
+        log(string.format("📊 Kills:%d | Quests:%d | +%d Lvls | %dm",
+            stats.kills, stats.quests, gained, mins))
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 الحلقة الرئيسية
+-- 🎯 الحلقة الرئيسية الذكية (النظام الصحيح!)
 -- ═══════════════════════════════════════════════════════════
-notify("🔥 Farm v17.0", "Quest + Speed + Level " .. getLevel(), 5)
+notify("🔥 Farm v18.0", "Smart Quest System | Lvl " .. getLevel(), 5)
 
-log("🎯 بدء الحلقة الرئيسية...")
+log("🎯 بدء الفارم الذكي...")
 log("⭐ Level: " .. getLevel() .. " | Sea: " .. getCurrentSea())
+
+-- انتظر تحميل كامل
+task.wait(3)
 
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
         local ok, err = pcall(function()
             
-            -- 1. تحقق من الحياة
+            -- ═══ 1. تحقق من الحياة ═══
             if not isAlive() then
                 stopAttack()
                 currentTarget = nil
@@ -699,148 +1050,152 @@ spawn(function()
                 return
             end
             
-            local hrp = getHRP()
-            if not hrp then task.wait(2); return end
-            
-            -- 2. تجهيز السلاح
+            -- ═══ 2. جهّز السلاح ═══
             local weapon = equipWeapon()
             if not weapon then
-                log("⚠️ لا سلاح!")
+                log("⚠️ لا يوجد سلاح!")
                 task.wait(3)
                 return
             end
             
-            -- 3. معلومات العدو
-            local target = getTargetInfo()
-            local currentSea = getCurrentSea()
+            -- ═══ 3. حدد Quest الحالي ═══
+            local quest = getCurrentQuest()
             
-            -- 4. الانتقال للبحر الصحيح
-            if currentSea ~= target.sea then
+            -- ═══ 4. تحقق من البحر ═══
+            if getCurrentSea() ~= quest.sea then
+                log("🚢 يجب الانتقال إلى Sea " .. quest.sea)
                 stopAttack()
                 currentTarget = nil
-                travelToSea(target.sea)
+                travelToSea(quest.sea)
                 return
             end
             
-            -- 5. ابحث عن العدو
-            local enemy, dist = findEnemy(target.name)
+            local hrp = getHRP()
+            if not hrp then task.wait(2); return end
             
-            -- 6. ما فيه عدو → روح الجزيرة + Quest
-            if not enemy then
+            -- ═══ 5. تحقق من وجود Quest نشط ═══
+            if not hasActiveQuest() then
+                -- لا يوجد Quest → روح لـ NPC وخذ Quest
+                log("📜 لا Quest نشط → الذهاب لـ NPC (" .. quest.questNpc .. ")")
+                
                 stopAttack()
                 currentTarget = nil
                 
-                local islandCF = ISLANDS[target.island]
-                if not islandCF then
-                    log("❌ جزيرة مجهولة: " .. target.island)
-                    task.wait(5)
-                    return
-                end
+                -- Teleport لـ NPC
+                pcall(function()
+                    hrp.CFrame = quest.npcCFrame + Vector3.new(0, 3, 0)
+                end)
+                task.wait(1.5)
                 
-                local distToIsland = (hrp.Position - islandCF.Position).Magnitude
+                -- خذ Quest عبر Remote
+                acceptQuest(quest)
+                stats.quests = stats.quests + 1
+                task.wait(1)
                 
-                if distToIsland > 500 then
-                    -- Teleport للجزيرة
-                    log("✈️ Teleport → " .. target.island .. " | " .. target.name .. " | Lv." .. getLevel())
+                return -- ارجع للأول عشان يتحقق من Quest
+            end
+            
+            -- ═══ 6. يوجد Quest نشط → روح مكان الأعداء ═══
+            local mob, dist = findMob(quest.mobName)
+            
+            if not mob then
+                -- لا يوجد عدو → روح لموقع تجمع الأعداء
+                stopAttack()
+                currentTarget = nil
+                
+                local distToMobArea = (hrp.Position - quest.mobCFrame.Position).Magnitude
+                
+                if distToMobArea > 200 then
+                    log("✈️ الذهاب لموقع " .. quest.mobName .. " في " .. quest.island)
                     pcall(function()
-                        hrp.CFrame = islandCF + Vector3.new(0, CONFIG.TELEPORT_HEIGHT, 0)
+                        hrp.CFrame = quest.mobCFrame + Vector3.new(0, CFG.TELEPORT_HEIGHT, 0)
                     end)
-                    task.wait(3)
-                    
-                    -- أخذ Quest بعد الوصول
-                    if not hasActiveQuest() then
-                        log("📜 أخذ Quest...")
-                        getQuest(target)
-                        stats.quests = stats.quests + 1
-                        task.wait(1)
-                    end
+                    task.wait(2)
                 else
-                    -- قريب من الجزيرة → تحرك لتحفيز spawn
-                    
-                    -- أولاً حاول أخذ Quest
-                    if not hasActiveQuest() then
-                        getQuest(target)
-                        stats.quests = stats.quests + 1
-                        task.wait(1)
-                    end
-                    
-                    wanderInIsland(islandCF, target.name)
+                    -- قريب من الموقع لكن ما فيه أعداء → استنى
+                    log("⏳ انتظار spawn " .. quest.mobName .. "...")
+                    task.wait(2)
                 end
                 return
             end
             
-            -- 7. وجدنا العدو → هاجم!
-            local eHRP = enemy:FindFirstChild("HumanoidRootPart")
-            local eHum = enemy:FindFirstChildOfClass("Humanoid")
-            if not eHRP or not eHum then task.wait(0.5); return end
+            -- ═══ 7. وجدنا عدو → جيبه واقتله ═══
+            local mr = mob:FindFirstChild("HumanoidRootPart")
+            local mh = mob:FindFirstChildOfClass("Humanoid")
+            if not mr or not mh then task.wait(0.5); return end
             
-            log(string.format("⚔️ %s | HP:%d | Lv.%d | Sea %d",
-                target.name, math.floor(eHum.Health), getLevel(), currentSea))
+            log(string.format("⚔️ %s | HP:%d | Lvl.%d | Dist:%dm",
+                quest.mobName, math.floor(mh.Health), getLevel(), math.floor(dist)))
             
-            currentTarget = enemy
+            currentTarget = mob
             startAttack()
             
             local killStart = tick()
             
-            -- 8. التصق بالعدو تحت الأرض
-            local conn = RunService.Heartbeat:Connect(function()
-                if not (enemy and enemy.Parent and eHum and eHum.Health > 0 
-                        and getgenv().BFF_FARM_ACTIVE and eHRP and eHRP.Parent) then
+            -- ═══ 8. حلقة القتل (التصق تحت العدو) ═══
+            local killConn = RunService.Heartbeat:Connect(function()
+                if not (mob and mob.Parent and mh and mh.Health > 0 
+                        and mr and mr.Parent and getgenv().BFF_FARM_ACTIVE) then
                     return
                 end
-                if (tick() - killStart) > CONFIG.KILL_TIMEOUT then return end
+                if (tick() - killStart) > CFG.KILL_TIMEOUT then return end
                 
                 pcall(function()
-                    local myHRP = getHRP()
-                    if myHRP then
-                        myHRP.CFrame = eHRP.CFrame * CFrame.new(0, CONFIG.UNDERGROUND_OFFSET, 0)
+                    local myHrp = getHRP()
+                    if myHrp then
+                        -- التصق فوق العدو (أفضل من تحت)
+                        myHrp.CFrame = mr.CFrame * CFrame.new(0, CFG.UNDERGROUND_Y, 0)
                     end
                 end)
+                
+                -- جذب الأعداء الأخرى
+                if CFG.BRING_MOBS and (tick() - killStart) % 2 < 0.1 then
+                    bringMobs(quest.mobName, mr.Position)
+                end
             end)
             
-            -- 9. انتظر الموت
-            while enemy and enemy.Parent and eHum and eHum.Health > 0 
+            -- ═══ 9. انتظر الموت ═══
+            while mob and mob.Parent and mh and mh.Health > 0 
                   and getgenv().BFF_FARM_ACTIVE do
-                if (tick() - killStart) > CONFIG.KILL_TIMEOUT then
-                    log("⏰ Timeout!")
+                if (tick() - killStart) > CFG.KILL_TIMEOUT then
+                    log("⏰ Timeout للعدو - تخطي")
                     break
                 end
-                task.wait(0.15)
+                task.wait(0.1)
             end
             
-            -- 10. تنظيف
-            if conn then conn:Disconnect() end
+            -- ═══ 10. تنظيف ═══
+            if killConn then killConn:Disconnect() end
             stopAttack()
             currentTarget = nil
             
-            if not enemy or not enemy.Parent or (eHum and eHum.Health <= 0) then
+            if not mob or not mob.Parent or (mh and mh.Health <= 0) then
                 stats.kills = stats.kills + 1
-                log("💀 " .. target.name .. " | Total: " .. stats.kills)
-                
-                -- ═══ مهم: بعد القتل، تحقق من Quest ═══
-                -- إذا Quest خلص → أخذ Quest جديد فوراً
-                task.wait(0.5)
-                if not hasActiveQuest() then
-                    log("📜 Quest انتهى! أخذ واحد جديد...")
-                    getQuest(target)
-                    stats.quests = stats.quests + 1
-                end
+                log("💀 " .. quest.mobName .. " | Total: " .. stats.kills)
+            end
+            
+            -- ═══ 11. تحقق سريع من Quest بعد القتل ═══
+            task.wait(0.3)
+            if not hasActiveQuest() then
+                log("🎁 Quest مكتمل!")
+                -- الحلقة راح ترجع تلقائياً وتاخذ Quest جديد
             end
             
         end)
         
         if not ok then
-            warn("⚠️ [FARM] " .. tostring(err))
+            warn("⚠️ [FARM ERR] " .. tostring(err))
             stopAttack()
             currentTarget = nil
+            task.wait(2)
         end
         
-        task.wait(CONFIG.LOOP_DELAY)
+        task.wait(0.2)
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🧹 تنظيف الذاكرة
+-- 🧹 GC
 -- ═══════════════════════════════════════════════════════════
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
@@ -852,15 +1207,16 @@ end)
 -- ═══════════════════════════════════════════════════════════
 -- ✅ جاهز
 -- ═══════════════════════════════════════════════════════════
-local t = getTargetInfo()
-log("✅ Farm v17.0 Ready!")
-log("🎯 " .. t.name .. " @ " .. t.island .. " | Sea " .. t.sea)
+local q = getCurrentQuest()
+log("✅ Farm v18.0 - Intelligent Quest System Ready!")
+log("🎯 Target: " .. q.mobName .. " @ " .. q.island)
+log("📜 Quest: " .. q.questArg1 .. " (" .. q.questArg2 .. ")")
 
 print("╔═══════════════════════════════════════════════╗")
-print("║  ✅ BFF FARM v17.0 ACTIVE!                   ║")
-print("║  🎯 " .. t.name)
-print("║  🏝️ " .. t.island)
+print("║  ✅ BFF FARM v18.0 - INTELLIGENT SYSTEM     ║")
+print("║  🎯 " .. q.mobName)
+print("║  🏝️ " .. q.island)
+print("║  📜 " .. q.questArg1 .. " (Arg " .. q.questArg2 .. ")")
 print("║  🌊 Sea " .. getCurrentSea())
 print("║  ⭐ Level " .. getLevel())
-print("║  📜 Quest System: ON                         ║")
 print("╚═══════════════════════════════════════════════╝")
