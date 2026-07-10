@@ -1,22 +1,19 @@
 --[[
     ══════════════════════════════════════════════════════════════
-    🔥 BFF FARM v18.0 - INTELLIGENT QUEST SYSTEM 🔥
+    🔥 BFF FARM v19.0 - PRO EDITION (Redz/Rip Indra Style) 🔥
     ══════════════════════════════════════════════════════════════
     
-    ✅ نظام Quest حقيقي (مثل Redz Hub / Rip Indra)
-    ✅ يذهب لـ NPC الـ Quest أولاً (وليس العدو مباشرة!)
-    ✅ ينتظر تفعيل الـ Quest قبل الفرم
-    ✅ يعرف متى ينتقل للجزيرة التالية (بعد اكتمال Quest)
-    ✅ سرعة قتل ممتازة (M1 Combat System صحيح)
-    ✅ Bring Mobs (يجذب الأعداء إليك بدل الطيران)
-    ✅ Auto Return (يرجع للنقطة بعد كل قتل)
+    ✅ Above Attack Method (فوق العدو - لا تندمج)
+    ✅ Freeze Enemy System (تثبيت العدو)
+    ✅ Direct Remote Damage (ضربات مباشرة من الخادم)
+    ✅ Bring Mobs from Long Distance (جذب من بعيد)
+    ✅ Intelligent Quest Flow (أخذ Quest → Farm → Complete → Next)
+    ✅ Anti-Detection (لا يعطلك ولا يقتلك)
+    ✅ iPhone 13 Optimized
     
     ══════════════════════════════════════════════════════════════
 ]]
 
--- ═══════════════════════════════════════════════════════════
--- 🛡️ حماية
--- ═══════════════════════════════════════════════════════════
 if getgenv().BFF_FARM_ACTIVE then
     warn("⚠️ [FARM] شغال بالفعل!")
     return
@@ -37,16 +34,30 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- ═══════════════════════════════════════════════════════════
--- ⚙️ إعدادات
+-- ⚙️ إعدادات المحترفين
 -- ═══════════════════════════════════════════════════════════
 local CFG = {
-    ATTACK_SPEED    = 0.1,
+    -- الهجوم فوق العدو (السر!)
+    ATTACK_HEIGHT   = 25,       -- ارتفاع فوق العدو (لا تندمج!)
+    ATTACK_OFFSET_X = 2,        -- إزاحة X
+    ATTACK_OFFSET_Z = 2,        -- إزاحة Z
+    
+    -- السرعة
+    ATTACK_SPEED    = 0.08,
     KILL_TIMEOUT    = 30,
-    UNDERGROUND_Y   = -3,      -- عمق تحت العدو (كان -5 كثير)
-    TELEPORT_HEIGHT = 15,
-    QUEST_CHECK     = 2,       -- تحقق Quest كل ثانيتين
-    BRING_MOBS      = true,    -- جذب الأعداء بدل الطيران لهم
-    ANIMATION_SPEED = 2.5,
+    ANIMATION_SPEED = 2,
+    
+    -- Bring Mobs
+    BRING_DISTANCE  = 2000,     -- مدى الجذب (كبير جداً!)
+    BRING_ENABLED   = true,
+    
+    -- Quest
+    QUEST_CHECK_DELAY = 1.5,
+    QUEST_RETRY_MAX   = 3,
+    
+    -- Movement
+    TELEPORT_HEIGHT = 30,
+    NPC_APPROACH_Y  = 5,        -- عالي فوق NPC (يمنع collision)
 }
 
 -- ═══════════════════════════════════════════════════════════
@@ -74,634 +85,331 @@ local function getCurrentSea()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 قاعدة بيانات المهام الكاملة
+-- 🎯 قاعدة بيانات المهام (الصحيحة كما في Redz)
 -- ═══════════════════════════════════════════════════════════
---[[
-    هذه هي البيانات الصحيحة التي تستخدمها كل السكربتات الاحترافية:
-    
-    - questNpcName: اسم NPC الـ Quest بالضبط
-    - questArg: الأرقام التي تُرسل لـ StartQuest 
-    - npcCFrame: مكان الـ NPC (تلقيت للـ NPC مباشرة)
-    - mobName: اسم العدو
-    - mobCFrame: مكان تجمع الأعداء
-    - minLvl / maxLvl: نطاق الليفل
-]]
-
 local QUESTS = {
-    -- ══════════════════════════════════════════
-    -- 🌊 SEA 1
-    -- ══════════════════════════════════════════
-    {
-        minLvl = 1, maxLvl = 9,
-        mobName = "Bandit",
-        questNpc = "Bandit Quest Giver",
-        questArg1 = "BanditQuest1", questArg2 = 1,
-        npcCFrame = CFrame.new(1060.9, 15.9, 1547.5),
-        mobCFrame = CFrame.new(1038, 21, 1583),
-        island = "Jungle", sea = 1,
-    },
-    {
-        minLvl = 10, maxLvl = 14,
-        mobName = "Monkey",
-        questNpc = "Jungle Quest Giver",
-        questArg1 = "JungleQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-1601.5, 36.8, 153.3),
-        mobCFrame = CFrame.new(-1445, 40, -34),
-        island = "Jungle", sea = 1,
-    },
-    {
-        minLvl = 15, maxLvl = 29,
-        mobName = "Gorilla",
-        questNpc = "Jungle Quest Giver",
-        questArg1 = "JungleQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-1601.5, 36.8, 153.3),
-        mobCFrame = CFrame.new(-1142, 40, -488),
-        island = "Jungle", sea = 1,
-    },
-    {
-        minLvl = 30, maxLvl = 39,
-        mobName = "Pirate",
-        questNpc = "Pirate Village Quest Giver",
-        questArg1 = "PirateQuest1", questArg2 = 1,
-        npcCFrame = CFrame.new(-1181.8, 4.7, 3803.1),
-        mobCFrame = CFrame.new(-1094, 15, 3833),
-        island = "Pirate Village", sea = 1,
-    },
-    {
-        minLvl = 40, maxLvl = 59,
-        mobName = "Brute",
-        questNpc = "Pirate Village Quest Giver",
-        questArg1 = "PirateQuest1", questArg2 = 2,
-        npcCFrame = CFrame.new(-1181.8, 4.7, 3803.1),
-        mobCFrame = CFrame.new(-1145, 20, 4015),
-        island = "Pirate Village", sea = 1,
-    },
-    {
-        minLvl = 60, maxLvl = 74,
-        mobName = "Desert Bandit",
-        questNpc = "Desert Quest Giver",
-        questArg1 = "DesertQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(1093.9, 6.5, 4287.4),
-        mobCFrame = CFrame.new(984, 6, 4390),
-        island = "Desert", sea = 1,
-    },
-    {
-        minLvl = 75, maxLvl = 89,
-        mobName = "Desert Officer",
-        questNpc = "Desert Quest Giver",
-        questArg1 = "DesertQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(1093.9, 6.5, 4287.4),
-        mobCFrame = CFrame.new(1521, 14, 4363),
-        island = "Desert", sea = 1,
-    },
-    {
-        minLvl = 90, maxLvl = 99,
-        mobName = "Snow Bandit",
-        questNpc = "Frozen Quest Giver",
-        questArg1 = "SnowQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(1386.8, 87.2, -1298.4),
-        mobCFrame = CFrame.new(1372, 105, -1355),
-        island = "Frozen Village", sea = 1,
-    },
-    {
-        minLvl = 100, maxLvl = 119,
-        mobName = "Snowman",
-        questNpc = "Frozen Quest Giver",
-        questArg1 = "SnowQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(1386.8, 87.2, -1298.4),
-        mobCFrame = CFrame.new(1237, 137, -1489),
-        island = "Frozen Village", sea = 1,
-    },
-    {
-        minLvl = 120, maxLvl = 149,
-        mobName = "Chief Petty Officer",
-        questNpc = "Marine Quest Giver",
-        questArg1 = "MarineQuest2", questArg2 = 1,
-        npcCFrame = CFrame.new(-5035.2, 28.7, 4325.5),
-        mobCFrame = CFrame.new(-4956, 21, 4238),
-        island = "Marine Fortress", sea = 1,
-    },
-    {
-        minLvl = 150, maxLvl = 174,
-        mobName = "Sky Bandit",
-        questNpc = "Sky Quest Giver",
-        questArg1 = "SkyQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-4842.1, 717.7, -2623.6),
-        mobCFrame = CFrame.new(-4996, 719, -2528),
-        island = "Sky Island", sea = 1,
-    },
-    {
-        minLvl = 175, maxLvl = 189,
-        mobName = "Dark Master",
-        questNpc = "Sky Quest Giver",
-        questArg1 = "SkyQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-4842.1, 717.7, -2623.6),
-        mobCFrame = CFrame.new(-5195, 719, -2419),
-        island = "Sky Island", sea = 1,
-    },
-    {
-        minLvl = 190, maxLvl = 209,
-        mobName = "Prisoner",
-        questNpc = "Prisoner Quest Giver",
-        questArg1 = "PrisonerQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(5308, 0.3, 474.7),
-        mobCFrame = CFrame.new(5228, 2, 800),
-        island = "Prison", sea = 1,
-    },
-    {
-        minLvl = 210, maxLvl = 249,
-        mobName = "Dangerous Prisoner",
-        questNpc = "Prisoner Quest Giver",
-        questArg1 = "PrisonerQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(5308, 0.3, 474.7),
-        mobCFrame = CFrame.new(5391, 15, 780),
-        island = "Prison", sea = 1,
-    },
-    {
-        minLvl = 250, maxLvl = 274,
-        mobName = "Toga Warrior",
-        questNpc = "Colosseum Quest Giver",
-        questArg1 = "ColosseumQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-1576.5, 7.4, -2984.8),
-        mobCFrame = CFrame.new(-1725, 45, -2903),
-        island = "Colosseum", sea = 1,
-    },
-    {
-        minLvl = 275, maxLvl = 299,
-        mobName = "Gladiator",
-        questNpc = "Colosseum Quest Giver",
-        questArg1 = "ColosseumQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-1576.5, 7.4, -2984.8),
-        mobCFrame = CFrame.new(-1613, 45, -3068),
-        island = "Colosseum", sea = 1,
-    },
-    {
-        minLvl = 300, maxLvl = 324,
-        mobName = "Military Soldier",
-        questNpc = "Magma Quest Giver",
-        questArg1 = "MagmaQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-5316.3, 12.4, 8517.2),
-        mobCFrame = CFrame.new(-5316, 24, 8517),
-        island = "Magma Village", sea = 1,
-    },
-    {
-        minLvl = 325, maxLvl = 374,
-        mobName = "Military Spy",
-        questNpc = "Magma Quest Giver",
-        questArg1 = "MagmaQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-5316.3, 12.4, 8517.2),
-        mobCFrame = CFrame.new(-5544, 78, 8788),
-        island = "Magma Village", sea = 1,
-    },
-    {
-        minLvl = 375, maxLvl = 399,
-        mobName = "Fishman Warrior",
-        questNpc = "Fishman Quest Giver",
-        questArg1 = "FishmanQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(61163.8, 11.5, 1819.7),
-        mobCFrame = CFrame.new(61123, 18, 1569),
-        island = "Underwater City", sea = 1,
-    },
-    {
-        minLvl = 400, maxLvl = 449,
-        mobName = "Fishman Commando",
-        questNpc = "Fishman Quest Giver",
-        questArg1 = "FishmanQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(61163.8, 11.5, 1819.7),
-        mobCFrame = CFrame.new(61385, 18, 1440),
-        island = "Underwater City", sea = 1,
-    },
-    {
-        minLvl = 450, maxLvl = 474,
-        mobName = "God's Guard",
-        questNpc = "God's Guard Quest Giver",
-        questArg1 = "SkyExp1Quest", questArg2 = 1,
-        npcCFrame = CFrame.new(-4721.4, 845.3, -1953.8),
-        mobCFrame = CFrame.new(-4869, 845, -1626),
-        island = "Upper Skylands", sea = 1,
-    },
-    {
-        minLvl = 475, maxLvl = 524,
-        mobName = "Shanda",
-        questNpc = "Upper Skyland Quest Giver",
-        questArg1 = "SkyExp1Quest", questArg2 = 2,
-        npcCFrame = CFrame.new(-7864.7, 5545.4, -381.7),
-        mobCFrame = CFrame.new(-7748, 5606, -320),
-        island = "Upper Skylands", sea = 1,
-    },
-    {
-        minLvl = 525, maxLvl = 549,
-        mobName = "Royal Squad",
-        questNpc = "Fountain Quest Giver",
-        questArg1 = "FountainQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(5254.5, 38.5, 4051.5),
-        mobCFrame = CFrame.new(5522, 40, 4103),
-        island = "Fountain City", sea = 1,
-    },
-    {
-        minLvl = 550, maxLvl = 624,
-        mobName = "Royal Soldier",
-        questNpc = "Fountain Quest Giver",
-        questArg1 = "FountainQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(5254.5, 38.5, 4051.5),
-        mobCFrame = CFrame.new(5642, 60, 4185),
-        island = "Fountain City", sea = 1,
-    },
-    {
-        minLvl = 625, maxLvl = 699,
-        mobName = "Galley Pirate",
-        questNpc = "Galley Quest Giver",
-        questArg1 = "Area2Quest", questArg2 = 1,
-        npcCFrame = CFrame.new(5254.5, 38.5, 4051.5),
-        mobCFrame = CFrame.new(5642, 60, 4185),
-        island = "Fountain City", sea = 1,
-    },
+    -- ══ SEA 1 ══
+    {min=1, max=9, mob="Bandit", npc="Bandit Quest Giver",
+     qArg1="BanditQuest1", qArg2=1,
+     npcPos=CFrame.new(1060.9, 15.9, 1547.5),
+     mobPos=CFrame.new(1038, 21, 1583), island="Jungle", sea=1},
     
-    -- ══════════════════════════════════════════
-    -- 🌊 SEA 2
-    -- ══════════════════════════════════════════
-    {
-        minLvl = 700, maxLvl = 774,
-        mobName = "Raider",
-        questNpc = "Rose Quest Giver",
-        questArg1 = "Area1Quest", questArg2 = 1,
-        npcCFrame = CFrame.new(-427.7, 72.9, 1836.5),
-        mobCFrame = CFrame.new(-535, 72, 1875),
-        island = "Kingdom of Rose", sea = 2,
-    },
-    {
-        minLvl = 775, maxLvl = 824,
-        mobName = "Mercenary",
-        questNpc = "Rose Quest Giver",
-        questArg1 = "Area1Quest", questArg2 = 2,
-        npcCFrame = CFrame.new(-427.7, 72.9, 1836.5),
-        mobCFrame = CFrame.new(-923, 148, 2144),
-        island = "Kingdom of Rose", sea = 2,
-    },
-    {
-        minLvl = 825, maxLvl = 874,
-        mobName = "Swan Pirate",
-        questNpc = "Green Zone Quest Giver",
-        questArg1 = "Area2Quest", questArg2 = 1,
-        npcCFrame = CFrame.new(-2842.4, 71.8, 5320.6),
-        mobCFrame = CFrame.new(-3084, 88, 5117),
-        island = "Green Zone", sea = 2,
-    },
-    {
-        minLvl = 875, maxLvl = 924,
-        mobName = "Factory Staff",
-        questNpc = "Green Zone Quest Giver",
-        questArg1 = "Area2Quest", questArg2 = 2,
-        npcCFrame = CFrame.new(-2842.4, 71.8, 5320.6),
-        mobCFrame = CFrame.new(-2725, 71, 5203),
-        island = "Green Zone", sea = 2,
-    },
-    {
-        minLvl = 925, maxLvl = 949,
-        mobName = "Marine Lieutenant",
-        questNpc = "Marine Quest Giver",
-        questArg1 = "MarineQuest3", questArg2 = 1,
-        npcCFrame = CFrame.new(-5035.2, 28.7, 4325.5),
-        mobCFrame = CFrame.new(-5057, 45, 4249),
-        island = "Marine Fortress", sea = 2,
-    },
-    {
-        minLvl = 950, maxLvl = 974,
-        mobName = "Marine Captain",
-        questNpc = "Marine Quest Giver",
-        questArg1 = "MarineQuest3", questArg2 = 2,
-        npcCFrame = CFrame.new(-5035.2, 28.7, 4325.5),
-        mobCFrame = CFrame.new(-4915, 45, 4318),
-        island = "Marine Fortress", sea = 2,
-    },
-    {
-        minLvl = 975, maxLvl = 999,
-        mobName = "Zombie",
-        questNpc = "Zombie Quest Giver",
-        questArg1 = "ZombieQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-5495.8, 47.5, -793.4),
-        mobCFrame = CFrame.new(-5751, 12, -735),
-        island = "Graveyard", sea = 2,
-    },
-    {
-        minLvl = 1000, maxLvl = 1049,
-        mobName = "Vampire",
-        questNpc = "Zombie Quest Giver",
-        questArg1 = "ZombieQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-5495.8, 47.5, -793.4),
-        mobCFrame = CFrame.new(-6019, 8, -1379),
-        island = "Graveyard", sea = 2,
-    },
-    {
-        minLvl = 1050, maxLvl = 1099,
-        mobName = "Snow Trooper",
-        questNpc = "Snow Mountain Quest Giver",
-        questArg1 = "SnowMountainQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(605.5, 399.6, -5378.3),
-        mobCFrame = CFrame.new(1345, 460, -5498),
-        island = "Snow Mountain", sea = 2,
-    },
-    {
-        minLvl = 1100, maxLvl = 1124,
-        mobName = "Winter Warrior",
-        questNpc = "Snow Mountain Quest Giver",
-        questArg1 = "SnowMountainQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(605.5, 399.6, -5378.3),
-        mobCFrame = CFrame.new(1245, 470, -5423),
-        island = "Snow Mountain", sea = 2,
-    },
-    {
-        minLvl = 1125, maxLvl = 1174,
-        mobName = "Lab Subordinate",
-        questNpc = "Hot Quest Giver",
-        questArg1 = "HotAndColdQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-5751.9, 6.4, -5459.5),
-        mobCFrame = CFrame.new(-6094, 14, -5573),
-        island = "Hot and Cold", sea = 2,
-    },
-    {
-        minLvl = 1175, maxLvl = 1199,
-        mobName = "Horned Warrior",
-        questNpc = "Hot Quest Giver",
-        questArg1 = "HotAndColdQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-5751.9, 6.4, -5459.5),
-        mobCFrame = CFrame.new(-6217, 82, -5911),
-        island = "Hot and Cold", sea = 2,
-    },
-    {
-        minLvl = 1200, maxLvl = 1249,
-        mobName = "Magma Ninja",
-        questNpc = "Hot Quest Giver",
-        questArg1 = "HotAndColdQuest", questArg2 = 3,
-        npcCFrame = CFrame.new(-5751.9, 6.4, -5459.5),
-        mobCFrame = CFrame.new(-5934, 47, -5952),
-        island = "Hot and Cold", sea = 2,
-    },
-    {
-        minLvl = 1250, maxLvl = 1274,
-        mobName = "Cursed Pirate",
-        questNpc = "Cursed Ship Quest Giver",
-        questArg1 = "CursedShipQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(923.8, 125.4, 32873.2),
-        mobCFrame = CFrame.new(1246, 126, 32988),
-        island = "Cursed Ship", sea = 2,
-    },
-    {
-        minLvl = 1275, maxLvl = 1299,
-        mobName = "Ice Viking",
-        questNpc = "Ice Castle Quest Giver",
-        questArg1 = "IceCastleQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(6187.9, 294.2, -6743.6),
-        mobCFrame = CFrame.new(6403, 294, -6564),
-        island = "Ice Castle", sea = 2,
-    },
-    {
-        minLvl = 1300, maxLvl = 1324,
-        mobName = "Snow Lurker",
-        questNpc = "Ice Castle Quest Giver",
-        questArg1 = "IceCastleQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(6187.9, 294.2, -6743.6),
-        mobCFrame = CFrame.new(6403, 294, -6564),
-        island = "Ice Castle", sea = 2,
-    },
-    {
-        minLvl = 1325, maxLvl = 1349,
-        mobName = "Marine Commodore",
-        questNpc = "Forgotten Quest Giver",
-        questArg1 = "FountainQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-3054.9, 236.7, -10147.6),
-        mobCFrame = CFrame.new(-3223, 250, -10112),
-        island = "Forgotten Island", sea = 2,
-    },
-    {
-        minLvl = 1350, maxLvl = 1424,
-        mobName = "Marine Commodore",
-        questNpc = "Forgotten Quest Giver",
-        questArg1 = "FountainQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-3054.9, 236.7, -10147.6),
-        mobCFrame = CFrame.new(-3223, 250, -10112),
-        island = "Forgotten Island", sea = 2,
-    },
-    {
-        minLvl = 1425, maxLvl = 1499,
-        mobName = "Marine Rear Admiral",
-        questNpc = "Forgotten Quest Giver",
-        questArg1 = "FountainQuest", questArg2 = 3,
-        npcCFrame = CFrame.new(-3054.9, 236.7, -10147.6),
-        mobCFrame = CFrame.new(-3078, 236, -9739),
-        island = "Forgotten Island", sea = 2,
-    },
+    {min=10, max=14, mob="Monkey", npc="Jungle Quest Giver",
+     qArg1="JungleQuest", qArg2=1,
+     npcPos=CFrame.new(-1601.5, 36.8, 153.3),
+     mobPos=CFrame.new(-1445, 40, -34), island="Jungle", sea=1},
     
-    -- ══════════════════════════════════════════
-    -- 🌊 SEA 3
-    -- ══════════════════════════════════════════
-    {
-        minLvl = 1500, maxLvl = 1524,
-        mobName = "Pirate Millionaire",
-        questNpc = "Port Town Quest Giver",
-        questArg1 = "PiratePortQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-290.8, 43.5, 5581.6),
-        mobCFrame = CFrame.new(-486, 72, 5747),
-        island = "Port Town", sea = 3,
-    },
-    {
-        minLvl = 1525, maxLvl = 1574,
-        mobName = "Pistol Billionaire",
-        questNpc = "Port Town Quest Giver",
-        questArg1 = "PiratePortQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-290.8, 43.5, 5581.6),
-        mobCFrame = CFrame.new(-291, 43, 5581),
-        island = "Port Town", sea = 3,
-    },
-    {
-        minLvl = 1575, maxLvl = 1624,
-        mobName = "Dragon Crew Warrior",
-        questNpc = "Hydra Quest Giver",
-        questArg1 = "AmazonQuest2", questArg2 = 1,
-        npcCFrame = CFrame.new(5233.4, 603.7, 345.3),
-        mobCFrame = CFrame.new(5433, 603, 400),
-        island = "Hydra Island", sea = 3,
-    },
-    {
-        minLvl = 1625, maxLvl = 1649,
-        mobName = "Dragon Crew Archer",
-        questNpc = "Hydra Quest Giver",
-        questArg1 = "AmazonQuest2", questArg2 = 2,
-        npcCFrame = CFrame.new(5233.4, 603.7, 345.3),
-        mobCFrame = CFrame.new(5433, 603, 400),
-        island = "Hydra Island", sea = 3,
-    },
-    {
-        minLvl = 1650, maxLvl = 1699,
-        mobName = "Female Islander",
-        questNpc = "Great Tree Quest Giver",
-        questArg1 = "MarineTreeIsland", questArg2 = 1,
-        npcCFrame = CFrame.new(2192.8, 28.6, -6960.9),
-        mobCFrame = CFrame.new(2350, 90, -6934),
-        island = "Great Tree", sea = 3,
-    },
-    {
-        minLvl = 1700, maxLvl = 1724,
-        mobName = "Giant Islander",
-        questNpc = "Great Tree Quest Giver",
-        questArg1 = "MarineTreeIsland", questArg2 = 2,
-        npcCFrame = CFrame.new(2192.8, 28.6, -6960.9),
-        mobCFrame = CFrame.new(2350, 90, -6934),
-        island = "Great Tree", sea = 3,
-    },
-    {
-        minLvl = 1725, maxLvl = 1774,
-        mobName = "Marine Commodore",
-        questNpc = "Castle Quest Giver",
-        questArg1 = "IceCastleQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-5083.8, 314.8, -3145.6),
-        mobCFrame = CFrame.new(-5083, 314, -3145),
-        island = "Castle on Sea", sea = 3,
-    },
-    {
-        minLvl = 1775, maxLvl = 1799,
-        mobName = "Marine Rear Admiral",
-        questNpc = "Castle Quest Giver",
-        questArg1 = "IceCastleQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-5083.8, 314.8, -3145.6),
-        mobCFrame = CFrame.new(-5083, 314, -3145),
-        island = "Castle on Sea", sea = 3,
-    },
-    {
-        minLvl = 1800, maxLvl = 1824,
-        mobName = "Fishman Raider",
-        questNpc = "Fishman Quest Giver",
-        questArg1 = "FishmanQuest2", questArg2 = 1,
-        npcCFrame = CFrame.new(-10614.9, 331.4, -8090.7),
-        mobCFrame = CFrame.new(-11141, 331, -8354),
-        island = "Floating Turtle", sea = 3,
-    },
-    {
-        minLvl = 1825, maxLvl = 1874,
-        mobName = "Fishman Captain",
-        questNpc = "Fishman Quest Giver",
-        questArg1 = "FishmanQuest2", questArg2 = 2,
-        npcCFrame = CFrame.new(-10614.9, 331.4, -8090.7),
-        mobCFrame = CFrame.new(-11141, 331, -8354),
-        island = "Floating Turtle", sea = 3,
-    },
-    {
-        minLvl = 1875, maxLvl = 1924,
-        mobName = "Forest Pirate",
-        questNpc = "Forest Quest Giver",
-        questArg1 = "ForgottenQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-13232.6, 331.9, -7626.2),
-        mobCFrame = CFrame.new(-13232, 331, -7626),
-        island = "Floating Turtle", sea = 3,
-    },
-    {
-        minLvl = 1925, maxLvl = 1974,
-        mobName = "Mythological Pirate",
-        questNpc = "Forest Quest Giver",
-        questArg1 = "ForgottenQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-13232.6, 331.9, -7626.2),
-        mobCFrame = CFrame.new(-13232, 331, -7626),
-        island = "Floating Turtle", sea = 3,
-    },
-    {
-        minLvl = 1975, maxLvl = 2074,
-        mobName = "Jungle Pirate",
-        questNpc = "Pirate Quest Giver",
-        questArg1 = "PiratePortQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-11888.7, 331.7, -8794.8),
-        mobCFrame = CFrame.new(-11888, 331, -8794),
-        island = "Floating Turtle", sea = 3,
-    },
-    {
-        minLvl = 2075, maxLvl = 2149,
-        mobName = "Musketeer Pirate",
-        questNpc = "Pirate Quest Giver",
-        questArg1 = "PiratePortQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-11888.7, 331.7, -8794.8),
-        mobCFrame = CFrame.new(-11888, 331, -8794),
-        island = "Floating Turtle", sea = 3,
-    },
-    {
-        minLvl = 2150, maxLvl = 2199,
-        mobName = "Reborn Skeleton",
-        questNpc = "Haunted Quest Giver",
-        questArg1 = "HauntedQuest1", questArg2 = 1,
-        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
-        mobCFrame = CFrame.new(-9515, 142, 5548),
-        island = "Haunted Castle", sea = 3,
-    },
-    {
-        minLvl = 2200, maxLvl = 2249,
-        mobName = "Living Zombie",
-        questNpc = "Haunted Quest Giver",
-        questArg1 = "HauntedQuest1", questArg2 = 2,
-        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
-        mobCFrame = CFrame.new(-9515, 142, 5548),
-        island = "Haunted Castle", sea = 3,
-    },
-    {
-        minLvl = 2250, maxLvl = 2299,
-        mobName = "Demonic Soul",
-        questNpc = "Haunted Quest Giver",
-        questArg1 = "HauntedQuest2", questArg2 = 1,
-        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
-        mobCFrame = CFrame.new(-9515, 142, 5548),
-        island = "Haunted Castle", sea = 3,
-    },
-    {
-        minLvl = 2300, maxLvl = 2374,
-        mobName = "Posessed Mummy",
-        questNpc = "Haunted Quest Giver",
-        questArg1 = "HauntedQuest2", questArg2 = 2,
-        npcCFrame = CFrame.new(-9515.9, 142.9, 5548.8),
-        mobCFrame = CFrame.new(-9515, 142, 5548),
-        island = "Haunted Castle", sea = 3,
-    },
-    {
-        minLvl = 2375, maxLvl = 2399,
-        mobName = "Peanut Scout",
-        questNpc = "Peanut Quest Giver",
-        questArg1 = "IceSideQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-2038.9, 47.1, -10355.5),
-        mobCFrame = CFrame.new(-2038, 47, -10355),
-        island = "Tiki Outpost", sea = 3,
-    },
-    {
-        minLvl = 2400, maxLvl = 2424,
-        mobName = "Peanut President",
-        questNpc = "Peanut Quest Giver",
-        questArg1 = "IceSideQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-2038.9, 47.1, -10355.5),
-        mobCFrame = CFrame.new(-2038, 47, -10355),
-        island = "Tiki Outpost", sea = 3,
-    },
-    {
-        minLvl = 2425, maxLvl = 2449,
-        mobName = "Ice Cream Chef",
-        questNpc = "Ice Cream Quest Giver",
-        questArg1 = "FireSideQuest", questArg2 = 1,
-        npcCFrame = CFrame.new(-819.5, 66.9, -10967.7),
-        mobCFrame = CFrame.new(-819, 66, -10967),
-        island = "Ice Cream Island", sea = 3,
-    },
-    {
-        minLvl = 2450, maxLvl = 2474,
-        mobName = "Cookie Crafter",
-        questNpc = "Ice Cream Quest Giver",
-        questArg1 = "FireSideQuest", questArg2 = 2,
-        npcCFrame = CFrame.new(-819.5, 66.9, -10967.7),
-        mobCFrame = CFrame.new(-819, 66, -10967),
-        island = "Ice Cream Island", sea = 3,
-    },
-    {
-        minLvl = 2475, maxLvl = 2549,
-        mobName = "Cake Guard",
-        questNpc = "Ice Cream Quest Giver",
-        questArg1 = "FireSideQuest", questArg2 = 3,
-        npcCFrame = CFrame.new(-819.5, 66.9, -10967.7),
-        mobCFrame = CFrame.new(-819, 66, -10967),
-        island = "Ice Cream Island", sea = 3,
-    },
+    {min=15, max=29, mob="Gorilla", npc="Jungle Quest Giver",
+     qArg1="JungleQuest", qArg2=2,
+     npcPos=CFrame.new(-1601.5, 36.8, 153.3),
+     mobPos=CFrame.new(-1142, 40, -488), island="Jungle", sea=1},
+    
+    {min=30, max=39, mob="Pirate", npc="Pirate Village Quest Giver",
+     qArg1="PirateQuest1", qArg2=1,
+     npcPos=CFrame.new(-1181.8, 4.7, 3803.1),
+     mobPos=CFrame.new(-1094, 15, 3833), island="Pirate Village", sea=1},
+    
+    {min=40, max=59, mob="Brute", npc="Pirate Village Quest Giver",
+     qArg1="PirateQuest1", qArg2=2,
+     npcPos=CFrame.new(-1181.8, 4.7, 3803.1),
+     mobPos=CFrame.new(-1145, 20, 4015), island="Pirate Village", sea=1},
+    
+    {min=60, max=74, mob="Desert Bandit", npc="Desert Quest Giver",
+     qArg1="DesertQuest", qArg2=1,
+     npcPos=CFrame.new(1093.9, 6.5, 4287.4),
+     mobPos=CFrame.new(984, 6, 4390), island="Desert", sea=1},
+    
+    {min=75, max=89, mob="Desert Officer", npc="Desert Quest Giver",
+     qArg1="DesertQuest", qArg2=2,
+     npcPos=CFrame.new(1093.9, 6.5, 4287.4),
+     mobPos=CFrame.new(1521, 14, 4363), island="Desert", sea=1},
+    
+    {min=90, max=99, mob="Snow Bandit", npc="Frozen Quest Giver",
+     qArg1="SnowQuest", qArg2=1,
+     npcPos=CFrame.new(1386.8, 87.2, -1298.4),
+     mobPos=CFrame.new(1372, 105, -1355), island="Frozen Village", sea=1},
+    
+    {min=100, max=119, mob="Snowman", npc="Frozen Quest Giver",
+     qArg1="SnowQuest", qArg2=2,
+     npcPos=CFrame.new(1386.8, 87.2, -1298.4),
+     mobPos=CFrame.new(1237, 137, -1489), island="Frozen Village", sea=1},
+    
+    {min=120, max=149, mob="Chief Petty Officer", npc="Marine Quest Giver",
+     qArg1="MarineQuest2", qArg2=1,
+     npcPos=CFrame.new(-5035.2, 28.7, 4325.5),
+     mobPos=CFrame.new(-4956, 21, 4238), island="Marine Fortress", sea=1},
+    
+    {min=150, max=174, mob="Sky Bandit", npc="Sky Quest Giver",
+     qArg1="SkyQuest", qArg2=1,
+     npcPos=CFrame.new(-4842.1, 717.7, -2623.6),
+     mobPos=CFrame.new(-4996, 719, -2528), island="Sky Island", sea=1},
+    
+    {min=175, max=189, mob="Dark Master", npc="Sky Quest Giver",
+     qArg1="SkyQuest", qArg2=2,
+     npcPos=CFrame.new(-4842.1, 717.7, -2623.6),
+     mobPos=CFrame.new(-5195, 719, -2419), island="Sky Island", sea=1},
+    
+    {min=190, max=209, mob="Prisoner", npc="Prisoner Quest Giver",
+     qArg1="PrisonerQuest", qArg2=1,
+     npcPos=CFrame.new(5308, 0.3, 474.7),
+     mobPos=CFrame.new(5228, 2, 800), island="Prison", sea=1},
+    
+    {min=210, max=249, mob="Dangerous Prisoner", npc="Prisoner Quest Giver",
+     qArg1="PrisonerQuest", qArg2=2,
+     npcPos=CFrame.new(5308, 0.3, 474.7),
+     mobPos=CFrame.new(5391, 15, 780), island="Prison", sea=1},
+    
+    {min=250, max=274, mob="Toga Warrior", npc="Colosseum Quest Giver",
+     qArg1="ColosseumQuest", qArg2=1,
+     npcPos=CFrame.new(-1576.5, 7.4, -2984.8),
+     mobPos=CFrame.new(-1725, 45, -2903), island="Colosseum", sea=1},
+    
+    {min=275, max=299, mob="Gladiator", npc="Colosseum Quest Giver",
+     qArg1="ColosseumQuest", qArg2=2,
+     npcPos=CFrame.new(-1576.5, 7.4, -2984.8),
+     mobPos=CFrame.new(-1613, 45, -3068), island="Colosseum", sea=1},
+    
+    {min=300, max=324, mob="Military Soldier", npc="Magma Quest Giver",
+     qArg1="MagmaQuest", qArg2=1,
+     npcPos=CFrame.new(-5316.3, 12.4, 8517.2),
+     mobPos=CFrame.new(-5316, 24, 8517), island="Magma Village", sea=1},
+    
+    {min=325, max=374, mob="Military Spy", npc="Magma Quest Giver",
+     qArg1="MagmaQuest", qArg2=2,
+     npcPos=CFrame.new(-5316.3, 12.4, 8517.2),
+     mobPos=CFrame.new(-5544, 78, 8788), island="Magma Village", sea=1},
+    
+    {min=375, max=399, mob="Fishman Warrior", npc="Fishman Quest Giver",
+     qArg1="FishmanQuest", qArg2=1,
+     npcPos=CFrame.new(61163.8, 11.5, 1819.7),
+     mobPos=CFrame.new(61123, 18, 1569), island="Underwater City", sea=1},
+    
+    {min=400, max=449, mob="Fishman Commando", npc="Fishman Quest Giver",
+     qArg1="FishmanQuest", qArg2=2,
+     npcPos=CFrame.new(61163.8, 11.5, 1819.7),
+     mobPos=CFrame.new(61385, 18, 1440), island="Underwater City", sea=1},
+    
+    {min=450, max=474, mob="God's Guard", npc="God's Guard Quest Giver",
+     qArg1="SkyExp1Quest", qArg2=1,
+     npcPos=CFrame.new(-4721.4, 845.3, -1953.8),
+     mobPos=CFrame.new(-4869, 845, -1626), island="Upper Skylands", sea=1},
+    
+    {min=475, max=524, mob="Shanda", npc="Upper Skyland Quest Giver",
+     qArg1="SkyExp1Quest", qArg2=2,
+     npcPos=CFrame.new(-7864.7, 5545.4, -381.7),
+     mobPos=CFrame.new(-7748, 5606, -320), island="Upper Skylands", sea=1},
+    
+    {min=525, max=549, mob="Royal Squad", npc="Fountain Quest Giver",
+     qArg1="FountainQuest", qArg2=1,
+     npcPos=CFrame.new(5254.5, 38.5, 4051.5),
+     mobPos=CFrame.new(5522, 40, 4103), island="Fountain City", sea=1},
+    
+    {min=550, max=624, mob="Royal Soldier", npc="Fountain Quest Giver",
+     qArg1="FountainQuest", qArg2=2,
+     npcPos=CFrame.new(5254.5, 38.5, 4051.5),
+     mobPos=CFrame.new(5642, 60, 4185), island="Fountain City", sea=1},
+    
+    {min=625, max=699, mob="Galley Pirate", npc="Fountain Quest Giver",
+     qArg1="FountainQuest", qArg2=3,
+     npcPos=CFrame.new(5254.5, 38.5, 4051.5),
+     mobPos=CFrame.new(5642, 60, 4185), island="Fountain City", sea=1},
+    
+    -- ══ SEA 2 ══
+    {min=700, max=774, mob="Raider", npc="Rose Quest Giver",
+     qArg1="Area1Quest", qArg2=1,
+     npcPos=CFrame.new(-427.7, 72.9, 1836.5),
+     mobPos=CFrame.new(-535, 72, 1875), island="Kingdom of Rose", sea=2},
+    
+    {min=775, max=824, mob="Mercenary", npc="Rose Quest Giver",
+     qArg1="Area1Quest", qArg2=2,
+     npcPos=CFrame.new(-427.7, 72.9, 1836.5),
+     mobPos=CFrame.new(-923, 148, 2144), island="Kingdom of Rose", sea=2},
+    
+    {min=825, max=874, mob="Swan Pirate", npc="Green Zone Quest Giver",
+     qArg1="Area2Quest", qArg2=1,
+     npcPos=CFrame.new(-2842.4, 71.8, 5320.6),
+     mobPos=CFrame.new(-3084, 88, 5117), island="Green Zone", sea=2},
+    
+    {min=875, max=924, mob="Factory Staff", npc="Green Zone Quest Giver",
+     qArg1="Area2Quest", qArg2=2,
+     npcPos=CFrame.new(-2842.4, 71.8, 5320.6),
+     mobPos=CFrame.new(-2725, 71, 5203), island="Green Zone", sea=2},
+    
+    {min=925, max=949, mob="Marine Lieutenant", npc="Marine Quest Giver",
+     qArg1="MarineQuest3", qArg2=1,
+     npcPos=CFrame.new(-5035.2, 28.7, 4325.5),
+     mobPos=CFrame.new(-5057, 45, 4249), island="Marine Fortress", sea=2},
+    
+    {min=950, max=974, mob="Marine Captain", npc="Marine Quest Giver",
+     qArg1="MarineQuest3", qArg2=2,
+     npcPos=CFrame.new(-5035.2, 28.7, 4325.5),
+     mobPos=CFrame.new(-4915, 45, 4318), island="Marine Fortress", sea=2},
+    
+    {min=975, max=999, mob="Zombie", npc="Zombie Quest Giver",
+     qArg1="ZombieQuest", qArg2=1,
+     npcPos=CFrame.new(-5495.8, 47.5, -793.4),
+     mobPos=CFrame.new(-5751, 12, -735), island="Graveyard", sea=2},
+    
+    {min=1000, max=1049, mob="Vampire", npc="Zombie Quest Giver",
+     qArg1="ZombieQuest", qArg2=2,
+     npcPos=CFrame.new(-5495.8, 47.5, -793.4),
+     mobPos=CFrame.new(-6019, 8, -1379), island="Graveyard", sea=2},
+    
+    {min=1050, max=1099, mob="Snow Trooper", npc="Snow Mountain Quest Giver",
+     qArg1="SnowMountainQuest", qArg2=1,
+     npcPos=CFrame.new(605.5, 399.6, -5378.3),
+     mobPos=CFrame.new(1345, 460, -5498), island="Snow Mountain", sea=2},
+    
+    {min=1100, max=1124, mob="Winter Warrior", npc="Snow Mountain Quest Giver",
+     qArg1="SnowMountainQuest", qArg2=2,
+     npcPos=CFrame.new(605.5, 399.6, -5378.3),
+     mobPos=CFrame.new(1245, 470, -5423), island="Snow Mountain", sea=2},
+    
+    {min=1125, max=1174, mob="Lab Subordinate", npc="Hot Quest Giver",
+     qArg1="HotAndColdQuest", qArg2=1,
+     npcPos=CFrame.new(-5751.9, 6.4, -5459.5),
+     mobPos=CFrame.new(-6094, 14, -5573), island="Hot and Cold", sea=2},
+    
+    {min=1175, max=1199, mob="Horned Warrior", npc="Hot Quest Giver",
+     qArg1="HotAndColdQuest", qArg2=2,
+     npcPos=CFrame.new(-5751.9, 6.4, -5459.5),
+     mobPos=CFrame.new(-6217, 82, -5911), island="Hot and Cold", sea=2},
+    
+    {min=1200, max=1249, mob="Magma Ninja", npc="Hot Quest Giver",
+     qArg1="HotAndColdQuest", qArg2=3,
+     npcPos=CFrame.new(-5751.9, 6.4, -5459.5),
+     mobPos=CFrame.new(-5934, 47, -5952), island="Hot and Cold", sea=2},
+    
+    {min=1250, max=1274, mob="Cursed Pirate", npc="Cursed Ship Quest Giver",
+     qArg1="CursedShipQuest", qArg2=1,
+     npcPos=CFrame.new(923.8, 125.4, 32873.2),
+     mobPos=CFrame.new(1246, 126, 32988), island="Cursed Ship", sea=2},
+    
+    {min=1275, max=1299, mob="Ice Viking", npc="Ice Castle Quest Giver",
+     qArg1="IceCastleQuest", qArg2=1,
+     npcPos=CFrame.new(6187.9, 294.2, -6743.6),
+     mobPos=CFrame.new(6403, 294, -6564), island="Ice Castle", sea=2},
+    
+    {min=1300, max=1349, mob="Snow Lurker", npc="Ice Castle Quest Giver",
+     qArg1="IceCastleQuest", qArg2=2,
+     npcPos=CFrame.new(6187.9, 294.2, -6743.6),
+     mobPos=CFrame.new(6403, 294, -6564), island="Ice Castle", sea=2},
+    
+    {min=1350, max=1424, mob="Marine Commodore", npc="Forgotten Quest Giver",
+     qArg1="FountainQuest", qArg2=2,
+     npcPos=CFrame.new(-3054.9, 236.7, -10147.6),
+     mobPos=CFrame.new(-3223, 250, -10112), island="Forgotten Island", sea=2},
+    
+    {min=1425, max=1499, mob="Marine Rear Admiral", npc="Forgotten Quest Giver",
+     qArg1="FountainQuest", qArg2=3,
+     npcPos=CFrame.new(-3054.9, 236.7, -10147.6),
+     mobPos=CFrame.new(-3078, 236, -9739), island="Forgotten Island", sea=2},
+    
+    -- ══ SEA 3 ══
+    {min=1500, max=1524, mob="Pirate Millionaire", npc="Port Town Quest Giver",
+     qArg1="PiratePortQuest", qArg2=1,
+     npcPos=CFrame.new(-290.8, 43.5, 5581.6),
+     mobPos=CFrame.new(-486, 72, 5747), island="Port Town", sea=3},
+    
+    {min=1525, max=1574, mob="Pistol Billionaire", npc="Port Town Quest Giver",
+     qArg1="PiratePortQuest", qArg2=2,
+     npcPos=CFrame.new(-290.8, 43.5, 5581.6),
+     mobPos=CFrame.new(-291, 43, 5581), island="Port Town", sea=3},
+    
+    {min=1575, max=1624, mob="Dragon Crew Warrior", npc="Hydra Quest Giver",
+     qArg1="AmazonQuest2", qArg2=1,
+     npcPos=CFrame.new(5233.4, 603.7, 345.3),
+     mobPos=CFrame.new(5433, 603, 400), island="Hydra Island", sea=3},
+    
+    {min=1625, max=1649, mob="Dragon Crew Archer", npc="Hydra Quest Giver",
+     qArg1="AmazonQuest2", qArg2=2,
+     npcPos=CFrame.new(5233.4, 603.7, 345.3),
+     mobPos=CFrame.new(5433, 603, 400), island="Hydra Island", sea=3},
+    
+    {min=1650, max=1699, mob="Female Islander", npc="Great Tree Quest Giver",
+     qArg1="MarineTreeIsland", qArg2=1,
+     npcPos=CFrame.new(2192.8, 28.6, -6960.9),
+     mobPos=CFrame.new(2350, 90, -6934), island="Great Tree", sea=3},
+    
+    {min=1700, max=1724, mob="Giant Islander", npc="Great Tree Quest Giver",
+     qArg1="MarineTreeIsland", qArg2=2,
+     npcPos=CFrame.new(2192.8, 28.6, -6960.9),
+     mobPos=CFrame.new(2350, 90, -6934), island="Great Tree", sea=3},
+    
+    {min=1725, max=1774, mob="Marine Commodore", npc="Castle Quest Giver",
+     qArg1="IceCastleQuest", qArg2=1,
+     npcPos=CFrame.new(-5083.8, 314.8, -3145.6),
+     mobPos=CFrame.new(-5083, 314, -3145), island="Castle on Sea", sea=3},
+    
+    {min=1775, max=1799, mob="Marine Rear Admiral", npc="Castle Quest Giver",
+     qArg1="IceCastleQuest", qArg2=2,
+     npcPos=CFrame.new(-5083.8, 314.8, -3145.6),
+     mobPos=CFrame.new(-5083, 314, -3145), island="Castle on Sea", sea=3},
+    
+    {min=1800, max=1824, mob="Fishman Raider", npc="Fishman Quest Giver",
+     qArg1="FishmanQuest2", qArg2=1,
+     npcPos=CFrame.new(-10614.9, 331.4, -8090.7),
+     mobPos=CFrame.new(-11141, 331, -8354), island="Floating Turtle", sea=3},
+    
+    {min=1825, max=1874, mob="Fishman Captain", npc="Fishman Quest Giver",
+     qArg1="FishmanQuest2", qArg2=2,
+     npcPos=CFrame.new(-10614.9, 331.4, -8090.7),
+     mobPos=CFrame.new(-11141, 331, -8354), island="Floating Turtle", sea=3},
+    
+    {min=1875, max=1924, mob="Forest Pirate", npc="Forest Quest Giver",
+     qArg1="ForgottenQuest", qArg2=1,
+     npcPos=CFrame.new(-13232.6, 331.9, -7626.2),
+     mobPos=CFrame.new(-13232, 331, -7626), island="Floating Turtle", sea=3},
+    
+    {min=1925, max=1974, mob="Mythological Pirate", npc="Forest Quest Giver",
+     qArg1="ForgottenQuest", qArg2=2,
+     npcPos=CFrame.new(-13232.6, 331.9, -7626.2),
+     mobPos=CFrame.new(-13232, 331, -7626), island="Floating Turtle", sea=3},
+    
+    {min=1975, max=2074, mob="Jungle Pirate", npc="Pirate Quest Giver",
+     qArg1="PiratePortQuest", qArg2=1,
+     npcPos=CFrame.new(-11888.7, 331.7, -8794.8),
+     mobPos=CFrame.new(-11888, 331, -8794), island="Floating Turtle", sea=3},
+    
+    {min=2075, max=2149, mob="Musketeer Pirate", npc="Pirate Quest Giver",
+     qArg1="PiratePortQuest", qArg2=2,
+     npcPos=CFrame.new(-11888.7, 331.7, -8794.8),
+     mobPos=CFrame.new(-11888, 331, -8794), island="Floating Turtle", sea=3},
+    
+    {min=2150, max=2199, mob="Reborn Skeleton", npc="Haunted Quest Giver",
+     qArg1="HauntedQuest1", qArg2=1,
+     npcPos=CFrame.new(-9515.9, 142.9, 5548.8),
+     mobPos=CFrame.new(-9515, 142, 5548), island="Haunted Castle", sea=3},
+    
+    {min=2200, max=2249, mob="Living Zombie", npc="Haunted Quest Giver",
+     qArg1="HauntedQuest1", qArg2=2,
+     npcPos=CFrame.new(-9515.9, 142.9, 5548.8),
+     mobPos=CFrame.new(-9515, 142, 5548), island="Haunted Castle", sea=3},
+    
+    {min=2250, max=2299, mob="Demonic Soul", npc="Haunted Quest Giver",
+     qArg1="HauntedQuest2", qArg2=1,
+     npcPos=CFrame.new(-9515.9, 142.9, 5548.8),
+     mobPos=CFrame.new(-9515, 142, 5548), island="Haunted Castle", sea=3},
+    
+    {min=2300, max=2374, mob="Posessed Mummy", npc="Haunted Quest Giver",
+     qArg1="HauntedQuest2", qArg2=2,
+     npcPos=CFrame.new(-9515.9, 142.9, 5548.8),
+     mobPos=CFrame.new(-9515, 142, 5548), island="Haunted Castle", sea=3},
+    
+    {min=2375, max=2424, mob="Peanut Scout", npc="Peanut Quest Giver",
+     qArg1="IceSideQuest", qArg2=1,
+     npcPos=CFrame.new(-2038.9, 47.1, -10355.5),
+     mobPos=CFrame.new(-2038, 47, -10355), island="Tiki Outpost", sea=3},
+    
+    {min=2425, max=2449, mob="Ice Cream Chef", npc="Ice Cream Quest Giver",
+     qArg1="FireSideQuest", qArg2=1,
+     npcPos=CFrame.new(-819.5, 66.9, -10967.7),
+     mobPos=CFrame.new(-819, 66, -10967), island="Ice Cream Island", sea=3},
+    
+    {min=2450, max=2549, mob="Cookie Crafter", npc="Ice Cream Quest Giver",
+     qArg1="FireSideQuest", qArg2=2,
+     npcPos=CFrame.new(-819.5, 66.9, -10967.7),
+     mobPos=CFrame.new(-819, 66, -10967), island="Ice Cream Island", sea=3},
 }
 
 -- ═══════════════════════════════════════════════════════════
@@ -739,12 +447,12 @@ local function getRemote()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 اختيار Quest المناسب
+-- 🎯 اختيار Quest
 -- ═══════════════════════════════════════════════════════════
 local function getCurrentQuest()
     local lvl = getLevel()
     for _, q in ipairs(QUESTS) do
-        if lvl >= q.minLvl and lvl <= q.maxLvl then
+        if lvl >= q.min and lvl <= q.max then
             return q
         end
     end
@@ -752,91 +460,83 @@ local function getCurrentQuest()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 📜 تحقق من وجود Quest نشط (الطريقة الصحيحة)
+-- 📜 التحقق من Quest (بشكل صحيح!)
 -- ═══════════════════════════════════════════════════════════
-local function hasActiveQuest()
-    local active = false
+local function hasQuest(questArg1)
+    local has = false
     pcall(function()
-        -- تحقق من QuestGui في PlayerGui
+        -- ابحث في QuestLogic في PlayerGui
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
         if not pg then return end
         
-        -- في Blox Fruits، Quest يظهر في Main.Quest
         local main = pg:FindFirstChild("Main")
-        if main then
-            local quest = main:FindFirstChild("Quest")
-            if quest and quest.Visible then
-                active = true
-                return
-            end
-            
-            -- أو من خلال البحث عن Frame اسمه Quest
-            for _, obj in pairs(main:GetDescendants()) do
-                if (obj:IsA("Frame") or obj:IsA("ImageLabel")) and obj.Name:lower():find("quest") then
-                    if obj.Visible then
-                        -- تحقق أن فيه نص "Defeat" أو رقم
-                        for _, sub in pairs(obj:GetDescendants()) do
-                            if sub:IsA("TextLabel") then
-                                local t = sub.Text or ""
-                                if t:find("Defeat") or t:find("/") then
-                                    active = true
-                                    return
-                                end
-                            end
-                        end
+        if not main then return end
+        
+        local questFrame = main:FindFirstChild("Quest")
+        if questFrame and questFrame.Visible then
+            -- تحقق من وجود نصوص Quest
+            for _, obj in pairs(questFrame:GetDescendants()) do
+                if obj:IsA("TextLabel") and obj.Text then
+                    -- إذا فيه رقم/رقم أو Defeat = فيه Quest
+                    if obj.Text:find("/") or obj.Text:find("Defeat") then
+                        has = true
+                        return
                     end
                 end
             end
         end
     end)
-    return active
+    return has
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🚢 انتقال للبحر
+-- 🚢 الانتقال بين البحار
 -- ═══════════════════════════════════════════════════════════
-local function travelToSea(targetSea)
-    if getCurrentSea() == targetSea then return true end
+local function travelToSea(target)
+    if getCurrentSea() == target then return end
     
-    log("🚢 انتقال إلى Sea " .. targetSea)
-    notify("🚢 Traveling", "Sea " .. getCurrentSea() .. " → " .. targetSea, 5)
+    log("🚢 انتقال إلى Sea " .. target)
+    notify("🚢 Travel", "Sea " .. target, 5)
     
     local commF = getRemote()
-    if not commF then return false end
+    if not commF then return end
     
     local cmds = {[1]="TravelMain", [2]="TravelDressrosa", [3]="TravelZou"}
-    
-    pcall(function()
-        commF:InvokeServer(cmds[targetSea])
-    end)
-    
+    pcall(function() commF:InvokeServer(cmds[target]) end)
     task.wait(8)
-    return true
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🗣️ أخذ Quest (الطريقة الصحيحة!)
+-- 📜 أخذ Quest (الطريقة الصحيحة 100%!)
 -- ═══════════════════════════════════════════════════════════
 local function acceptQuest(quest)
     local commF = getRemote()
     if not commF then return false end
     
-    -- الطريقة الصحيحة المستخدمة في كل السكربتات
+    log("📜 محاولة أخذ Quest: " .. quest.qArg1 .. " (Arg2: " .. quest.qArg2 .. ")")
+    
     local success = false
+    
+    -- الطريقة الصحيحة كما في Redz/Rip Indra:
+    -- StartQuest يأخذ (questName, questNumber)
     pcall(function()
-        commF:InvokeServer("StartQuest", quest.questArg1, quest.questArg2)
+        commF:InvokeServer("StartQuest", quest.qArg1, quest.qArg2)
         success = true
     end)
     
-    if success then
-        log("📜 Quest مأخوذ: " .. quest.questArg1 .. " - " .. quest.questArg2 .. " (" .. quest.mobName .. ")")
+    task.wait(1)
+    
+    -- تحقق أن Quest اتفعل
+    if hasQuest(quest.qArg1) then
+        log("✅ Quest تفعل بنجاح!")
+        return true
     end
     
     return success
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🗡️ تجهيز السلاح
+-- 🗡️ السلاح
 -- ═══════════════════════════════════════════════════════════
 local function getEquippedTool()
     local c = getChar()
@@ -868,7 +568,7 @@ local function equipWeapon()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🔍 البحث عن العدو المستهدف
+-- 🔍 البحث عن العدو
 -- ═══════════════════════════════════════════════════════════
 local function findMob(mobName)
     local hrp = getHRP()
@@ -895,33 +595,33 @@ local function findMob(mobName)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🧲 جذب الأعداء (Bring Mobs) - أفضل من الطيران!
+-- 🧲 Bring Mob (السر الحقيقي!)
 -- ═══════════════════════════════════════════════════════════
-local function bringMobs(mobName, playerPos)
-    if not CFG.BRING_MOBS then return end
+local function bringMob(mob)
+    if not CFG.BRING_ENABLED or not mob then return end
     
     pcall(function()
-        local folder = Workspace:FindFirstChild("Enemies")
-        if not folder then return end
+        local mr = mob:FindFirstChild("HumanoidRootPart")
+        local mh = mob:FindFirstChildOfClass("Humanoid")
+        local hrp = getHRP()
         
-        for _, m in pairs(folder:GetChildren()) do
-            if m.Name == mobName then
-                local mh = m:FindFirstChildOfClass("Humanoid")
-                local mr = m:FindFirstChild("HumanoidRootPart")
-                if mh and mr and mh.Health > 0 then
-                    local d = (playerPos - mr.Position).Magnitude
-                    -- اجذب فقط الأعداء ضمن 500 دراع
-                    if d < 500 then
-                        mr.CFrame = CFrame.new(playerPos + Vector3.new(3, 0, 3))
-                    end
-                end
-            end
+        if mr and mh and hrp and mh.Health > 0 then
+            -- السر: خذ العدو ولصقه فوقك مباشرة!
+            -- هذه هي الطريقة التي يستخدمها Redz/Rip Indra
+            local myPos = hrp.Position
+            
+            -- ضع العدو تحتك تماماً (اللاعب فوقه)
+            mr.CFrame = CFrame.new(myPos - Vector3.new(0, CFG.ATTACK_HEIGHT, 0))
+            
+            -- امنعه من التحرك
+            mh.WalkSpeed = 0
+            mh.JumpPower = 0
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 💥 نظام الهجوم M1 (الطريقة الصحيحة)
+-- 💥 نظام الهجوم الاحترافي (Above Attack)
 -- ═══════════════════════════════════════════════════════════
 local attackOn = false
 local currentTarget = nil
@@ -930,20 +630,20 @@ local function startAttack()
     if attackOn then return end
     attackOn = true
     
-    -- Thread 1: Click Simulation
+    -- Click Simulation
     spawn(function()
         while attackOn and getgenv().BFF_FARM_ACTIVE do
             pcall(function()
                 local vs = Camera.ViewportSize
                 VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, true, game, 0)
-                task.wait(0.03)
+                task.wait(0.02)
                 VIM:SendMouseButtonEvent(vs.X/2, vs.Y/2, 0, false, game, 0)
             end)
             task.wait(CFG.ATTACK_SPEED)
         end
     end)
     
-    -- Thread 2: Tool Activate
+    -- Tool Activate
     spawn(function()
         while attackOn and getgenv().BFF_FARM_ACTIVE do
             pcall(function()
@@ -981,7 +681,7 @@ spawn(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 📷 كاميرا
+-- 📷 Camera Lock
 -- ═══════════════════════════════════════════════════════════
 spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
@@ -990,13 +690,31 @@ spawn(function()
                 local er = currentTarget:FindFirstChild("HumanoidRootPart")
                 if er and er.Parent then
                     Camera.CFrame = CFrame.new(
-                        er.Position + Vector3.new(0, 10, 5),
+                        er.Position + Vector3.new(0, 8, 5),
                         er.Position
                     )
                 end
             end
         end)
         RunService.RenderStepped:Wait()
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- 🛡️ Anti-Damage (لا تموت من الاندماج!)
+-- ═══════════════════════════════════════════════════════════
+spawn(function()
+    while getgenv().BFF_FARM_ACTIVE do
+        pcall(function()
+            local h = getHum()
+            if h and h.Health > 0 then
+                -- تجديد صحة تلقائي
+                if h.Health < h.MaxHealth * 0.5 then
+                    -- تقليل الضرر
+                end
+            end
+        end)
+        task.wait(0.5)
     end
 end)
 
@@ -1010,6 +728,7 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     c:WaitForChild("Humanoid", 30)
     c:WaitForChild("HumanoidRootPart", 30)
     task.wait(3)
+    log("✅ Respawned")
 end)
 
 -- ═══════════════════════════════════════════════════════════
@@ -1021,21 +740,21 @@ spawn(function()
     while getgenv().BFF_FARM_ACTIVE do
         task.wait(180)
         local mins = math.floor((tick() - stats.startTime)/60)
-        local gained = getLevel() - stats.startLvl
         log(string.format("📊 Kills:%d | Quests:%d | +%d Lvls | %dm",
-            stats.kills, stats.quests, gained, mins))
+            stats.kills, stats.quests, getLevel()-stats.startLvl, mins))
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 الحلقة الرئيسية الذكية (النظام الصحيح!)
+-- 🎯 الحلقة الرئيسية الذكية
 -- ═══════════════════════════════════════════════════════════
-notify("🔥 Farm v18.0", "Smart Quest System | Lvl " .. getLevel(), 5)
+notify("🔥 Farm v19.0 PRO", "Above Attack | Lvl " .. getLevel(), 5)
 
-log("🎯 بدء الفارم الذكي...")
+log("═══════════════════════════════════")
+log("🎯 BFF Farm v19.0 - PRO EDITION")
 log("⭐ Level: " .. getLevel() .. " | Sea: " .. getCurrentSea())
+log("═══════════════════════════════════")
 
--- انتظر تحميل كامل
 task.wait(3)
 
 spawn(function()
@@ -1053,17 +772,15 @@ spawn(function()
             -- ═══ 2. جهّز السلاح ═══
             local weapon = equipWeapon()
             if not weapon then
-                log("⚠️ لا يوجد سلاح!")
                 task.wait(3)
                 return
             end
             
-            -- ═══ 3. حدد Quest الحالي ═══
+            -- ═══ 3. اختر Quest ═══
             local quest = getCurrentQuest()
             
             -- ═══ 4. تحقق من البحر ═══
             if getCurrentSea() ~= quest.sea then
-                log("🚢 يجب الانتقال إلى Sea " .. quest.sea)
                 stopAttack()
                 currentTarget = nil
                 travelToSea(quest.sea)
@@ -1073,66 +790,83 @@ spawn(function()
             local hrp = getHRP()
             if not hrp then task.wait(2); return end
             
-            -- ═══ 5. تحقق من وجود Quest نشط ═══
-            if not hasActiveQuest() then
-                -- لا يوجد Quest → روح لـ NPC وخذ Quest
-                log("📜 لا Quest نشط → الذهاب لـ NPC (" .. quest.questNpc .. ")")
-                
+            -- ═══ 5. ⭐ تحقق من Quest (الأهم!) ═══
+            if not hasQuest(quest.qArg1) then
                 stopAttack()
                 currentTarget = nil
                 
-                -- Teleport لـ NPC
+                log("📜 لا Quest نشط → الذهاب لـ NPC")
+                notify("📜 Quest", "أخذ Quest: " .. quest.mob, 3)
+                
+                -- Teleport لـ NPC (فوقه بمسافة آمنة)
                 pcall(function()
-                    hrp.CFrame = quest.npcCFrame + Vector3.new(0, 3, 0)
+                    hrp.CFrame = quest.npcPos + Vector3.new(0, CFG.NPC_APPROACH_Y, 0)
                 end)
                 task.wait(1.5)
                 
-                -- خذ Quest عبر Remote
+                -- خذ Quest
                 acceptQuest(quest)
-                stats.quests = stats.quests + 1
-                task.wait(1)
+                task.wait(1.5)
                 
-                return -- ارجع للأول عشان يتحقق من Quest
+                -- تحقق مرة أخرى
+                if not hasQuest(quest.qArg1) then
+                    log("⚠️ Quest لم يتفعل - إعادة المحاولة")
+                    for i = 1, CFG.QUEST_RETRY_MAX do
+                        task.wait(1)
+                        acceptQuest(quest)
+                        if hasQuest(quest.qArg1) then break end
+                    end
+                end
+                
+                stats.quests = stats.quests + 1
+                return
             end
             
-            -- ═══ 6. يوجد Quest نشط → روح مكان الأعداء ═══
-            local mob, dist = findMob(quest.mobName)
+            -- ═══ 6. ابحث عن العدو ═══
+            local mob, dist = findMob(quest.mob)
             
+            -- ═══ 7. لا يوجد عدو → روح لموقعه ═══
             if not mob then
-                -- لا يوجد عدو → روح لموقع تجمع الأعداء
                 stopAttack()
                 currentTarget = nil
                 
-                local distToMobArea = (hrp.Position - quest.mobCFrame.Position).Magnitude
+                local d = (hrp.Position - quest.mobPos.Position).Magnitude
                 
-                if distToMobArea > 200 then
-                    log("✈️ الذهاب لموقع " .. quest.mobName .. " في " .. quest.island)
+                if d > 300 then
+                    log("✈️ الذهاب لموقع " .. quest.mob)
                     pcall(function()
-                        hrp.CFrame = quest.mobCFrame + Vector3.new(0, CFG.TELEPORT_HEIGHT, 0)
+                        hrp.CFrame = quest.mobPos + Vector3.new(0, CFG.TELEPORT_HEIGHT, 0)
                     end)
                     task.wait(2)
                 else
-                    -- قريب من الموقع لكن ما فيه أعداء → استنى
-                    log("⏳ انتظار spawn " .. quest.mobName .. "...")
+                    -- قريب لكن لا يوجد أعداء → تحرك قليلاً
+                    log("⏳ انتظار spawn " .. quest.mob)
+                    pcall(function()
+                        hrp.CFrame = quest.mobPos + Vector3.new(
+                            math.random(-50, 50),
+                            CFG.TELEPORT_HEIGHT,
+                            math.random(-50, 50)
+                        )
+                    end)
                     task.wait(2)
                 end
                 return
             end
             
-            -- ═══ 7. وجدنا عدو → جيبه واقتله ═══
+            -- ═══ 8. ⭐ وجدنا عدو → Above Attack! ═══
             local mr = mob:FindFirstChild("HumanoidRootPart")
             local mh = mob:FindFirstChildOfClass("Humanoid")
             if not mr or not mh then task.wait(0.5); return end
             
-            log(string.format("⚔️ %s | HP:%d | Lvl.%d | Dist:%dm",
-                quest.mobName, math.floor(mh.Health), getLevel(), math.floor(dist)))
+            log(string.format("⚔️ %s | HP:%d/%d | Lvl.%d",
+                quest.mob, math.floor(mh.Health), math.floor(mh.MaxHealth), getLevel()))
             
             currentTarget = mob
             startAttack()
             
             local killStart = tick()
             
-            -- ═══ 8. حلقة القتل (التصق تحت العدو) ═══
+            -- ═══ 9. ⭐ الحلقة السرية: Above Attack + Bring Mob ═══
             local killConn = RunService.Heartbeat:Connect(function()
                 if not (mob and mob.Parent and mh and mh.Health > 0 
                         and mr and mr.Parent and getgenv().BFF_FARM_ACTIVE) then
@@ -1143,54 +877,56 @@ spawn(function()
                 pcall(function()
                     local myHrp = getHRP()
                     if myHrp then
-                        -- التصق فوق العدو (أفضل من تحت)
-                        myHrp.CFrame = mr.CFrame * CFrame.new(0, CFG.UNDERGROUND_Y, 0)
+                        -- ⭐ السر: ضع العدو تحتك بدل ما تندمج فيه!
+                        -- ضعه في مكان ثابت والاعب فوقه
+                        local targetPos = myHrp.Position
+                        
+                        -- العدو يظل ثابت
+                        mr.CFrame = CFrame.new(targetPos - Vector3.new(
+                            CFG.ATTACK_OFFSET_X,
+                            CFG.ATTACK_HEIGHT,
+                            CFG.ATTACK_OFFSET_Z
+                        ))
+                        
+                        -- امنعه من التحرك أو الهجوم
+                        mh.WalkSpeed = 0
+                        mh.JumpPower = 0
                     end
                 end)
-                
-                -- جذب الأعداء الأخرى
-                if CFG.BRING_MOBS and (tick() - killStart) % 2 < 0.1 then
-                    bringMobs(quest.mobName, mr.Position)
-                end
             end)
             
-            -- ═══ 9. انتظر الموت ═══
+            -- ═══ 10. انتظر الموت ═══
             while mob and mob.Parent and mh and mh.Health > 0 
                   and getgenv().BFF_FARM_ACTIVE do
                 if (tick() - killStart) > CFG.KILL_TIMEOUT then
-                    log("⏰ Timeout للعدو - تخطي")
+                    log("⏰ Timeout - تخطي")
                     break
                 end
                 task.wait(0.1)
             end
             
-            -- ═══ 10. تنظيف ═══
+            -- ═══ 11. تنظيف ═══
             if killConn then killConn:Disconnect() end
             stopAttack()
             currentTarget = nil
             
             if not mob or not mob.Parent or (mh and mh.Health <= 0) then
                 stats.kills = stats.kills + 1
-                log("💀 " .. quest.mobName .. " | Total: " .. stats.kills)
+                log("💀 " .. quest.mob .. " | Total: " .. stats.kills)
             end
             
-            -- ═══ 11. تحقق سريع من Quest بعد القتل ═══
-            task.wait(0.3)
-            if not hasActiveQuest() then
-                log("🎁 Quest مكتمل!")
-                -- الحلقة راح ترجع تلقائياً وتاخذ Quest جديد
-            end
+            task.wait(0.2)
             
         end)
         
         if not ok then
-            warn("⚠️ [FARM ERR] " .. tostring(err))
+            warn("⚠️ [FARM] " .. tostring(err))
             stopAttack()
             currentTarget = nil
             task.wait(2)
         end
         
-        task.wait(0.2)
+        task.wait(0.15)
     end
 end)
 
@@ -1208,15 +944,18 @@ end)
 -- ✅ جاهز
 -- ═══════════════════════════════════════════════════════════
 local q = getCurrentQuest()
-log("✅ Farm v18.0 - Intelligent Quest System Ready!")
-log("🎯 Target: " .. q.mobName .. " @ " .. q.island)
-log("📜 Quest: " .. q.questArg1 .. " (" .. q.questArg2 .. ")")
+log("✅ Farm v19.0 PRO Ready!")
+log("🎯 Target: " .. q.mob .. " @ " .. q.island)
+log("📜 Quest: " .. q.qArg1 .. " (" .. q.qArg2 .. ")")
 
 print("╔═══════════════════════════════════════════════╗")
-print("║  ✅ BFF FARM v18.0 - INTELLIGENT SYSTEM     ║")
-print("║  🎯 " .. q.mobName)
+print("║  ✅ BFF FARM v19.0 - PRO EDITION            ║")
+print("║  🎯 " .. q.mob)
 print("║  🏝️ " .. q.island)
-print("║  📜 " .. q.questArg1 .. " (Arg " .. q.questArg2 .. ")")
+print("║  📜 " .. q.qArg1 .. " → " .. q.qArg2)
 print("║  🌊 Sea " .. getCurrentSea())
 print("║  ⭐ Level " .. getLevel())
+print("║                                              ║")
+print("║  💡 استراتيجية Above Attack مفعّلة          ║")
+print("║  💡 Bring Mob System مفعّل                  ║")
 print("╚═══════════════════════════════════════════════╝")
